@@ -1,0 +1,12 @@
+services:
+  botarr:
+    build: .
+    container_name: botarr
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./downloads:/downloads
+    environment:
+      - RUST_LOG=botarr=info,api=info,xdcc=info
+      - BOTARR_DOWNLOAD_DIR=/downloads
+    restart: unless-stopped
