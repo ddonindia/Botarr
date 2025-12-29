@@ -66,3 +66,33 @@ export interface BotStats {
     average_speed: number;
     reliability_score: number;
 }
+
+export interface NetworkConfig {
+    host: string;
+    port: number;
+    ssl: boolean;
+    autojoin_channels: string[];
+    join_delay_secs: number;
+}
+
+export interface AppConfig {
+    use_ssl: boolean;
+    connect_timeout: number;
+    general_timeout: number;
+    proxy_enabled: boolean;
+    proxy_url: string;
+    nickname: string;
+    username: string;
+    realname: string;
+    max_retries: number;
+    retry_delay: number;
+    queue_limit: number;
+    passive_dcc: boolean;
+    dcc_port_min: number;
+    dcc_port_max: number;
+    resume_enabled: boolean;
+    enabled_providers: string[];
+    results_per_page: number;
+    search_timeout: number;
+    networks: Record<string, NetworkConfig>;
+}

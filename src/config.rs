@@ -17,6 +17,12 @@ pub struct NetworkConfig {
     /// Use SSL/TLS for this network
     #[serde(default = "default_true")]
     pub ssl: bool,
+    /// Channels to join on connect (e.g. for idle requirements)
+    #[serde(default)]
+    pub autojoin_channels: Vec<String>,
+    /// Seconds to wait after joining before requesting download
+    #[serde(default = "default_join_delay_secs")]
+    pub join_delay_secs: u64,
 }
 
 /// Complete application configuration
@@ -147,6 +153,9 @@ fn default_results_per_page() -> u32 {
 fn default_search_timeout() -> u64 {
     30
 }
+fn default_join_delay_secs() -> u64 {
+    6
+}
 
 impl Default for AppConfig {
     fn default() -> Self {
@@ -226,6 +235,8 @@ impl AppConfig {
                 host: "irc.scenep2p.net".to_string(),
                 port: 6697,
                 ssl: true,
+                autojoin_channels: Vec::new(),
+                join_delay_secs: 6,
             },
         );
 
@@ -236,6 +247,8 @@ impl AppConfig {
                 host: "irc.rizon.net".to_string(),
                 port: 6667,
                 ssl: false,
+                autojoin_channels: Vec::new(),
+                join_delay_secs: 6,
             },
         );
 
@@ -245,6 +258,8 @@ impl AppConfig {
                 host: "irc.abjects.net".to_string(),
                 port: 6667,
                 ssl: false,
+                autojoin_channels: Vec::new(),
+                join_delay_secs: 6,
             },
         );
 
@@ -252,23 +267,29 @@ impl AppConfig {
     }
 
     /// Resolve network name to connection details
-    pub fn resolve_network(&self, network: &str) -> (String, u16, bool) {
+    pub fn resolve_network(&self, network: &str) -> (String, u16, bool, Vec<String>, u64) {
         // Check explicit mapping (case-insensitive)
         for (key, config) in &self.networks {
             if key.eq_ignore_ascii_case(network) {
-                return (config.host.clone(), config.port, config.ssl);
+                return (
+                    config.host.clone(),
+                    config.port,
+                    config.ssl,
+                    config.autojoin_channels.clone(),
+                    config.join_delay_secs,
+                );
             }
         }
 
         // If it looks like a hostname (contains a dot), use as-is
         if network.contains('.') {
             let port = if self.use_ssl { 6697 } else { 6667 };
-            return (network.to_string(), port, self.use_ssl);
+            return (network.to_string(), port, self.use_ssl, Vec::new(), 6);
         }
 
         let host = format!("irc.{}.net", network.to_lowercase());
         let port = if self.use_ssl { 6697 } else { 6667 };
-        (host, port, self.use_ssl)
+        (host, port, self.use_ssl, Vec::new(), 6)
     }
 }
 
@@ -290,7 +311,7 @@ mod tests {
     #[test]
     fn test_network_resolution_explicit() {
         let config = AppConfig::default();
-        let (host, port, ssl) = config.resolve_network("SceneP2P");
+        let (host, port, ssl, _, _) = config.resolve_network("SceneP2P");
         assert_eq!(host, "irc.scenep2p.net");
         assert_eq!(port, 6697);
         assert!(ssl);
@@ -299,7 +320,7 @@ mod tests {
     #[test]
     fn test_network_resolution_hostname() {
         let config = AppConfig::default();
-        let (host, port, ssl) = config.resolve_network("irc.example.com");
+        let (host, port, ssl, _, _) = config.resolve_network("irc.example.com");
         assert_eq!(host, "irc.example.com");
         assert_eq!(port, 6697); // Default SSL port
         assert!(ssl);
@@ -308,7 +329,7 @@ mod tests {
     #[test]
     fn test_network_resolution_heuristic() {
         let config = AppConfig::default();
-        let (host, port, _ssl) = config.resolve_network("UnknownNet");
+        let (host, _port, _ssl, _, _) = config.resolve_network("UnknownNet");
         assert_eq!(host, "irc.unknownnet.net");
     }
 

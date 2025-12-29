@@ -1,50 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
 import { Settings, Wifi, User, Zap, Download, Search, Globe, Save, RefreshCw, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
-
-interface NetworkConfig {
-    host: string;
-    port: number;
-    ssl: boolean;
-}
-
-interface AppSettings {
-    // Connection
-    use_ssl: boolean;
-    connect_timeout: number;
-    general_timeout: number;
-    proxy_enabled: boolean;
-    proxy_url: string;
-
-    // Identity
-    nickname: string;
-    username: string;
-    realname: string;
-
-    // Behavior
-    max_retries: number;
-    retry_delay: number;
-    queue_limit: number;
-
-    // DCC
-    passive_dcc: boolean;
-    dcc_port_min: number;
-    dcc_port_max: number;
-    resume_enabled: boolean;
-
-    // Search
-    enabled_providers: string[];
-    results_per_page: number;
-    search_timeout: number;
-
-    // Networks
-    networks: Record<string, NetworkConfig>;
-}
+import { AppConfig, NetworkConfig } from '../types';
 
 type SettingsSection = 'connection' | 'identity' | 'behavior' | 'dcc' | 'search' | 'networks';
 
 export const SettingsTab: React.FC = () => {
-    const [settings, setSettings] = useState<AppSettings | null>(null);
+    const [settings, setSettings] = useState<AppConfig | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [activeSection, setActiveSection] = useState<SettingsSection>('connection');
@@ -91,7 +54,7 @@ export const SettingsTab: React.FC = () => {
         }
     };
 
-    const updateSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
+    const updateSetting = <K extends keyof AppConfig>(key: K, value: AppConfig[K]) => {
         if (settings) {
             setSettings({ ...settings, [key]: value });
         }
@@ -103,11 +66,13 @@ export const SettingsTab: React.FC = () => {
         const network: NetworkConfig = {
             host: `irc.${newNetworkName.toLowerCase()}.net`,
             port: 6697,
-            ssl: true
+            ssl: true,
+            autojoin_channels: [],
+            join_delay_secs: 6
         };
 
         try {
-            await fetch(`/api/settings/networks/${encodeURIComponent(newNetworkName)}`, {
+            await fetch(`/ api / settings / networks / ${encodeURIComponent(newNetworkName)} `, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(network)
@@ -128,7 +93,7 @@ export const SettingsTab: React.FC = () => {
         if (!settings) return;
 
         try {
-            await fetch(`/api/settings/networks/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            await fetch(`/ api / settings / networks / ${encodeURIComponent(name)} `, { method: 'DELETE' });
             const newNetworks = { ...settings.networks };
             delete newNetworks[name];
             setSettings({ ...settings, networks: newNetworks });
@@ -199,10 +164,10 @@ export const SettingsTab: React.FC = () => {
                             <button
                                 key={section.id}
                                 onClick={() => setActiveSection(section.id)}
-                                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${activeSection === section.id
+                                className={`w - full flex items - center gap - 3 px - 3 py - 2 rounded - lg transition - colors text - left ${activeSection === section.id
                                     ? 'bg-primary/20 text-primary'
                                     : 'hover:bg-white/5 text-secondary'
-                                    }`}
+                                    } `}
                             >
                                 {section.icon}
                                 <span className="text-sm font-medium">{section.label}</span>
@@ -536,6 +501,40 @@ export const SettingsTab: React.FC = () => {
                                                     />
                                                     <span className="text-sm">SSL</span>
                                                 </label>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-4 grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs text-muted mb-1">
+                                                    Autojoin Channels (comma separated)
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={network.autojoin_channels.join(', ')}
+                                                    onChange={e => {
+                                                        const channels = e.target.value
+                                                            .split(',')
+                                                            .map(c => c.trim())
+                                                            .filter(c => c.length > 0);
+                                                        updateNetwork(name, 'autojoin_channels', channels);
+                                                    }}
+                                                    placeholder="#chan1, #chan2"
+                                                    className="w-full bg-surface border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-primary/50"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-muted mb-1">
+                                                    Join Delay (seconds)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    value={network.join_delay_secs}
+                                                    onChange={e => updateNetwork(name, 'join_delay_secs', parseInt(e.target.value) || 0)}
+                                                    min={0}
+                                                    max={300}
+                                                    className="w-full bg-surface border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-primary/50"
+                                                />
                                             </div>
                                         </div>
                                     </div>
