@@ -85,3 +85,85 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
+
+  create-release:
+    name: Release - ${{ matrix.platform.name }}
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    needs: build-and-test
+    runs-on: ${{ matrix.platform.os }}
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        platform:
+          - name: Linux (x86_64)
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: botarr
+          - name: Windows (x86_64)
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: botarr.exe
+          - name: macOS (x86_64)
+            os: macos-latest
+            target: x86_64-apple-darwin
+            bin: botarr
+          - name: macOS (ARM64)
+            os: macos-latest
+            target: aarch64-apple-darwin
+            bin: botarr
+          - name: Linux (ARM64)
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            bin: botarr
+            use_cross: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Frontend
+        run: |
+          cd web
+          npm ci
+          npm run build
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.platform.target }}
+
+      - name: Build Binary
+        run: |
+          if [ "${{ matrix.platform.use_cross }}" = "true" ]; then
+            cargo install cross
+            cross build --release --target ${{ matrix.platform.target }}
+          else
+            cargo build --release --target ${{ matrix.platform.target }}
+          fi
+
+      - name: Prepare Artifact
+        shell: bash
+        run: |
+          cd target/${{ matrix.platform.target }}/release
+          if [ "${{ matrix.platform.os }}" = "windows-latest" ]; then
+            7z a ../../../botarr-${{ matrix.platform.target }}.zip ${{ matrix.platform.bin }}
+          else
+            tar czf ../../../botarr-${{ matrix.platform.target }}.tar.gz ${{ matrix.platform.bin }}
+          fi
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref == 'refs/heads/main' && 'continuous' || github.ref_name }}
+          name: ${{ github.ref == 'refs/heads/main' && 'Continuous Build' || github.ref_name }}
+          prerelease: true
+          files: |
+            botarr-${{ matrix.platform.target }}.zip
+            botarr-${{ matrix.platform.target }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
