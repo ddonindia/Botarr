@@ -4,6 +4,41 @@ import { Settings, Wifi, User, Zap, Download, Search, Globe, Save, RefreshCw, Pl
 import { useToast } from '../hooks/useToast';
 import { AppConfig, NetworkConfig } from '../types';
 
+// Helper component for autojoin channels input that allows typing commas
+const AutojoinInput: React.FC<{
+    value: string[];
+    onChange: (channels: string[]) => void;
+    placeholder?: string;
+    className?: string;
+}> = ({ value, onChange, placeholder, className }) => {
+    const [localValue, setLocalValue] = useState(value.join(', '));
+
+    // Sync local value when external value changes (e.g., on initial load)
+    useEffect(() => {
+        setLocalValue(value.join(', '));
+    }, [value.join(',')]); // Only update if the actual array content changes
+
+    const handleBlur = () => {
+        // Parse and commit the value on blur
+        const channels = localValue
+            .split(',')
+            .map(c => c.trim())
+            .filter(c => c.length > 0);
+        onChange(channels);
+    };
+
+    return (
+        <input
+            type="text"
+            value={localValue}
+            onChange={e => setLocalValue(e.target.value)}
+            onBlur={handleBlur}
+            placeholder={placeholder}
+            className={className}
+        />
+    );
+};
+
 type SettingsSection = 'connection' | 'identity' | 'behavior' | 'dcc' | 'search' | 'networks';
 
 export const SettingsTab: React.FC = () => {
@@ -72,7 +107,7 @@ export const SettingsTab: React.FC = () => {
         };
 
         try {
-            await fetch(`/ api / settings / networks / ${encodeURIComponent(newNetworkName)} `, {
+            await fetch(`/api/settings/networks/${encodeURIComponent(newNetworkName)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(network)
@@ -93,7 +128,7 @@ export const SettingsTab: React.FC = () => {
         if (!settings) return;
 
         try {
-            await fetch(`/ api / settings / networks / ${encodeURIComponent(name)} `, { method: 'DELETE' });
+            await fetch(`/api/settings/networks/${encodeURIComponent(name)}`, { method: 'DELETE' });
             const newNetworks = { ...settings.networks };
             delete newNetworks[name];
             setSettings({ ...settings, networks: newNetworks });
@@ -164,10 +199,10 @@ export const SettingsTab: React.FC = () => {
                             <button
                                 key={section.id}
                                 onClick={() => setActiveSection(section.id)}
-                                className={`w - full flex items - center gap - 3 px - 3 py - 2 rounded - lg transition - colors text - left ${activeSection === section.id
+                                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${activeSection === section.id
                                     ? 'bg-primary/20 text-primary'
                                     : 'hover:bg-white/5 text-secondary'
-                                    } `}
+                                    }`}
                             >
                                 {section.icon}
                                 <span className="text-sm font-medium">{section.label}</span>
@@ -509,16 +544,9 @@ export const SettingsTab: React.FC = () => {
                                                 <label className="block text-xs text-muted mb-1">
                                                     Autojoin Channels (comma separated)
                                                 </label>
-                                                <input
-                                                    type="text"
-                                                    value={network.autojoin_channels.join(', ')}
-                                                    onChange={e => {
-                                                        const channels = e.target.value
-                                                            .split(',')
-                                                            .map(c => c.trim())
-                                                            .filter(c => c.length > 0);
-                                                        updateNetwork(name, 'autojoin_channels', channels);
-                                                    }}
+                                                <AutojoinInput
+                                                    value={network.autojoin_channels}
+                                                    onChange={(channels) => updateNetwork(name, 'autojoin_channels', channels)}
                                                     placeholder="#chan1, #chan2"
                                                     className="w-full bg-surface border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-primary/50"
                                                 />

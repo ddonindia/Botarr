@@ -713,6 +713,7 @@ pub struct UpdateSettingsRequest {
     pub enabled_providers: Option<Vec<String>>,
     pub results_per_page: Option<u32>,
     pub search_timeout: Option<u64>,
+    pub networks: Option<std::collections::HashMap<String, NetworkConfig>>,
 }
 
 /// Update settings
@@ -776,6 +777,9 @@ async fn update_settings(
     }
     if let Some(v) = req.search_timeout {
         config.search_timeout = v.clamp(10, 120);
+    }
+    if let Some(v) = req.networks {
+        config.networks = v;
     }
 
     // Save to file
