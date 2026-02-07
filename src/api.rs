@@ -95,6 +95,160 @@ pub struct ErrorResponse {
     pub error: String,
 }
 
+// ============= Download Task Helper =============
+
+use crate::config::AppConfig;
+use crate::xdcc::transfer::EnhancedTransferManager;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
+
+/// Spawn a download task for the given transfer
+/// This handles the download loop and automatically spawns retry tasks when needed
+fn spawn_download_task(
+    tid: String,
+    url: XdccUrl,
+    cancel_token: CancellationToken,
+    download_dir: String,
+    transfer_manager: Arc<RwLock<EnhancedTransferManager>>,
+    config: Arc<RwLock<AppConfig>>,
+) {
+    tokio::spawn(async move {
+        tracing::info!("Starting XDCC download task for {}", tid);
+
+        // Build XdccConfig from AppConfig
+        let app_config = config.read().await;
+        let client_config = XdccConfig {
+            nickname: app_config.nickname.clone(),
+            username: app_config.username.clone(),
+            realname: app_config.realname.clone(),
+            use_ssl: app_config.use_ssl,
+            connect_timeout_secs: app_config.connect_timeout,
+            timeout_secs: app_config.general_timeout,
+            download_dir: download_dir.clone(),
+            networks: app_config
+                .networks
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        (
+                            v.host.clone(),
+                            v.port,
+                            v.ssl,
+                            v.autojoin_channels.clone(),
+                            v.join_delay_secs,
+                        ),
+                    )
+                })
+                .collect(),
+            proxy_enabled: app_config.proxy_enabled,
+            proxy_url: app_config.proxy_url.clone(),
+            resume_enabled: app_config.resume_enabled,
+        };
+        drop(app_config); // Release lock before async operations
+
+        let client = XdccClient::new(client_config);
+
+        // Update status
+        {
+            let tm = transfer_manager.write().await;
+            tm.update_status(&tid, TransferStatus::Connecting).await;
+        }
+
+        // Variable to hold retry info if we need to spawn a retry
+        let mut retry_info: Option<(XdccUrl, CancellationToken)> = None;
+
+        match client.start_download(url).await {
+            Ok(mut rx) => {
+                tracing::info!("Download channel open for {}", tid);
+                loop {
+                    tokio::select! {
+                        // Check for cancellation
+                        _ = cancel_token.cancelled() => {
+                            tracing::info!("Download cancelled for {}", tid);
+                            break;
+                        }
+                        // Process events
+                        event = rx.recv() => {
+                            match event {
+                                Some(XdccEvent::Connecting) => {
+                                    let tm = transfer_manager.write().await;
+                                    tm.update_status(&tid, TransferStatus::Connecting).await;
+                                }
+                                Some(XdccEvent::Joining(channel)) => {
+                                    tracing::info!("Joining channel: {}", channel);
+                                    let tm = transfer_manager.write().await;
+                                    tm.update_status(&tid, TransferStatus::Joining).await;
+                                }
+                                Some(XdccEvent::Joined(channel)) => {
+                                    tracing::info!("Joined channel: {}", channel);
+                                }
+                                Some(XdccEvent::Requesting(bot, slot)) => {
+                                    tracing::info!("Requesting pack #{} from {}", slot, bot);
+                                    let tm = transfer_manager.write().await;
+                                    tm.update_status(&tid, TransferStatus::Requesting).await;
+                                }
+                                Some(XdccEvent::DccSend { filename, size, ip, port }) => {
+                                    tracing::info!("DCC SEND from {}:{} - {} ({} bytes)", ip, port, filename, size);
+                                    let tm = transfer_manager.write().await;
+                                    tm.set_file_info(&tid, filename, size).await;
+                                    tm.update_status(&tid, TransferStatus::Downloading).await;
+                                }
+                                Some(XdccEvent::Progress { downloaded, total, speed }) => {
+                                    let tm = transfer_manager.write().await;
+                                    tm.update_progress(&tid, downloaded, speed).await;
+                                    // Log progress periodically
+                                    if downloaded % (10 * 1024 * 1024) < 65536 {
+                                        let pct = if total > 0 { (downloaded as f64 / total as f64) * 100.0 } else { 0.0 };
+                                        tracing::debug!("Download progress: {:.1}% ({}/{} bytes)", pct, downloaded, total);
+                                    }
+                                }
+                                Some(XdccEvent::Completed) => {
+                                    tracing::info!("Download completed for {}", tid);
+                                    let tm = transfer_manager.write().await;
+                                    tm.set_completed(&tid).await;
+                                    break;
+                                }
+                                Some(XdccEvent::Error(e)) => {
+                                    tracing::error!("Download error for {}: {}", tid, e);
+                                    let tm = transfer_manager.write().await;
+                                    retry_info = tm.set_failed(&tid, e.to_string(), e.is_fatal()).await;
+                                    break;
+                                }
+                                None => break, // Channel closed
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::error!("Failed to start download {}: {}", tid, e);
+                let tm = transfer_manager.write().await;
+                retry_info = tm.set_failed(&tid, e.to_string(), e.is_fatal()).await;
+            }
+        }
+
+        // If retry was triggered, spawn a new download task
+        if let Some((retry_url, new_token)) = retry_info {
+            tracing::info!("Spawning retry download for {}", tid);
+            // Small delay before retry to avoid hammering the server
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            spawn_download_task(
+                tid.clone(),
+                retry_url,
+                new_token,
+                download_dir,
+                transfer_manager,
+                config,
+            );
+        } else {
+            tracing::info!("Download task finished for {}", tid);
+        }
+    });
+}
+
 // ============= Handlers =============
 
 /// Search XDCC providers
@@ -198,121 +352,14 @@ pub async fn xdcc_download(
     let tid = transfer_id.clone();
 
     // Start the download in a background task
-    let _handle = tokio::spawn(async move {
-        tracing::info!("Starting XDCC download task for {}", tid);
-
-        // Build XdccConfig from AppConfig
-        let app_config = config.read().await;
-        let client_config = XdccConfig {
-            nickname: app_config.nickname.clone(),
-            username: app_config.username.clone(),
-            realname: app_config.realname.clone(),
-            use_ssl: app_config.use_ssl,
-            connect_timeout_secs: app_config.connect_timeout,
-            timeout_secs: app_config.general_timeout,
-            download_dir,
-            networks: app_config
-                .networks
-                .iter()
-                .map(|(k, v)| {
-                    (
-                        k.clone(),
-                        (
-                            v.host.clone(),
-                            v.port,
-                            v.ssl,
-                            v.autojoin_channels.clone(),
-                            v.join_delay_secs,
-                        ),
-                    )
-                })
-                .collect(),
-            proxy_enabled: app_config.proxy_enabled,
-            proxy_url: app_config.proxy_url.clone(),
-            resume_enabled: app_config.resume_enabled,
-        };
-        drop(app_config); // Release lock before async operations
-
-        let client = XdccClient::new(client_config);
-
-        // Update status
-        {
-            let tm = transfer_manager.write().await;
-            tm.update_status(&tid, TransferStatus::Connecting).await;
-        }
-
-        match client.start_download(url).await {
-            Ok(mut rx) => {
-                tracing::info!("Download channel open for {}", tid);
-                loop {
-                    tokio::select! {
-                        // Check for cancellation
-                        _ = cancel_token.cancelled() => {
-                            tracing::info!("Download cancelled for {}", tid);
-                            break;
-                        }
-                        // Process events
-                        event = rx.recv() => {
-                            match event {
-                                Some(XdccEvent::Connecting) => {
-                                    let tm = transfer_manager.write().await;
-                                    tm.update_status(&tid, TransferStatus::Connecting).await;
-                                }
-                                Some(XdccEvent::Joining(channel)) => {
-                                    tracing::info!("Joining channel: {}", channel);
-                                    let tm = transfer_manager.write().await;
-                                    tm.update_status(&tid, TransferStatus::Joining).await;
-                                }
-                                Some(XdccEvent::Joined(channel)) => {
-                                    tracing::info!("Joined channel: {}", channel);
-                                }
-                                Some(XdccEvent::Requesting(bot, slot)) => {
-                                    tracing::info!("Requesting pack #{} from {}", slot, bot);
-                                    let tm = transfer_manager.write().await;
-                                    tm.update_status(&tid, TransferStatus::Requesting).await;
-                                }
-                                Some(XdccEvent::DccSend { filename, size, ip, port }) => {
-                                    tracing::info!("DCC SEND from {}:{} - {} ({} bytes)", ip, port, filename, size);
-                                    let tm = transfer_manager.write().await;
-                                    tm.set_file_info(&tid, filename, size).await;
-                                    tm.update_status(&tid, TransferStatus::Downloading).await;
-                                }
-                                Some(XdccEvent::Progress { downloaded, total, speed }) => {
-                                    let tm = transfer_manager.write().await;
-                                    tm.update_progress(&tid, downloaded, speed).await;
-                                    // Log progress periodically
-                                    if downloaded % (10 * 1024 * 1024) < 65536 {
-                                        let pct = if total > 0 { (downloaded as f64 / total as f64) * 100.0 } else { 0.0 };
-                                        tracing::debug!("Download progress: {:.1}% ({}/{} bytes)", pct, downloaded, total);
-                                    }
-                                }
-                                Some(XdccEvent::Completed) => {
-                                    tracing::info!("Download completed for {}", tid);
-                                    let tm = transfer_manager.write().await;
-                                    tm.set_completed(&tid).await;
-                                    break;
-                                }
-                                Some(XdccEvent::Error(e)) => {
-                                    tracing::error!("Download error for {}: {}", tid, e);
-                                    let tm = transfer_manager.write().await;
-                                    tm.set_failed(&tid, e.to_string(), e.is_fatal()).await;
-                                    break;
-                                }
-                                None => break, // Channel closed
-                                _ => {}
-                            }
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                tracing::error!("Failed to start download {}: {}", tid, e);
-                let tm = transfer_manager.write().await;
-                tm.set_failed(&tid, e.to_string(), e.is_fatal()).await;
-            }
-        }
-        tracing::info!("Download task finished for {}", tid);
-    });
+    spawn_download_task(
+        tid,
+        url,
+        cancel_token,
+        download_dir,
+        transfer_manager,
+        config,
+    );
 
     Json(DownloadResponse {
         transfer_id,

@@ -8,7 +8,7 @@
 
 mod client;
 mod search;
-mod transfer;
+pub mod transfer;
 
 // Re-export public API items
 pub use client::{XdccClient, XdccConfig, XdccEvent};
