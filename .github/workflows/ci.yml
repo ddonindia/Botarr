@@ -138,6 +138,7 @@ jobs:
           key: ${{ matrix.platform.target }}
 
       - name: Build Binary
+        shell: bash
         run: |
           if [ "${{ matrix.platform.use_cross }}" = "true" ]; then
             cargo install cross
