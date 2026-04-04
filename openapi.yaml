@@ -1,0 +1,697 @@
+openapi: 3.0.3
+info:
+  title: Botarr API
+  description: API for Botarr XDCC Download Manager
+  version: 0.1.1
+servers:
+  - url: /
+paths:
+  /api/search:
+    get:
+      summary: Search XDCC providers
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: providers
+          in: query
+          schema:
+            type: string
+          description: Comma-separated list of providers
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+
+  /api/parse:
+    post:
+      summary: Parse and validate an XDCC URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParseUrlRequest'
+      responses:
+        '200':
+          description: Parse result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParseUrlResponse'
+
+  /api/download:
+    post:
+      summary: Start an XDCC download
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DownloadRequest'
+      responses:
+        '200':
+          description: Download started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadResponse'
+        '400':
+          description: Invalid URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/transfers:
+    get:
+      summary: List all active transfers
+      responses:
+        '200':
+          description: List of transfers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transfers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EnhancedTransfer'
+
+  /api/transfers/{id}:
+    get:
+      summary: Get a specific transfer status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Transfer status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnhancedTransfer'
+        '404':
+          description: Transfer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Cancel a transfer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cancel status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        '404':
+          description: Transfer not found
+
+  /api/transfers/{id}/retry:
+    post:
+      summary: Retry a failed transfer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Retry status
+        '400':
+          description: Cannot retry transfer
+
+  /api/transfers/{id}/priority:
+    post:
+      summary: Set transfer priority
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPriorityRequest'
+      responses:
+        '200':
+          description: Priority updated
+        '404':
+          description: Transfer not found
+
+  /api/bots/stats:
+    get:
+      summary: Get bot statistics
+      responses:
+        '200':
+          description: Bot stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bots:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BotStats'
+
+  /api/analytics:
+    get:
+      summary: Get system analytics
+      responses:
+        '200':
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadAnalytics'
+
+  /api/history:
+    get:
+      summary: Get download history
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: List of historical transfers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  history:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/XdccTransfer'
+                  count:
+                    type: integer
+
+  /api/history/{id}:
+    delete:
+      summary: Delete a history item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: delete_file
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Item deleted
+        '404':
+          description: Item not found
+
+  /api/history/bulk:
+    post:
+      summary: Bulk delete download history
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteRequest'
+      responses:
+        '200':
+          description: Deletion status
+
+  /api/search-history:
+    get:
+      summary: Get search history
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated search history
+
+  /api/search-history/{id}:
+    delete:
+      summary: Delete a search history item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Item deleted
+        '404':
+          description: Item not found
+
+  /api/search-history/bulk:
+    post:
+      summary: Bulk delete search history
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteSearchRequest'
+      responses:
+        '200':
+          description: Deletion status
+
+  /api/queue:
+    get:
+      summary: Get current queue size
+      responses:
+        '200':
+          description: Queue size
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queue_size:
+                    type: integer
+                  status:
+                    type: string
+
+  /api/settings:
+    get:
+      summary: Get application settings
+      responses:
+        '200':
+          description: Application configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppConfig'
+    put:
+      summary: Update application settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSettingsRequest'
+      responses:
+        '200':
+          description: Settings updated
+
+  /api/settings/networks:
+    get:
+      summary: List all configured networks
+      responses:
+        '200':
+          description: Map of network configurations
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  $ref: '#/components/schemas/NetworkConfig'
+
+  /api/settings/networks/{name}:
+    put:
+      summary: Add or update a network configuration
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NetworkConfig'
+      responses:
+        '200':
+          description: Network updated
+    delete:
+      summary: Delete a network configuration
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Network deleted
+        '404':
+          description: Network not found
+
+components:
+  schemas:
+    SearchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/XdccSearchResult'
+        count:
+          type: integer
+
+    XdccSearchResult:
+      type: object
+      properties:
+        url:
+          $ref: '#/components/schemas/XdccUrl'
+        filename:
+          type: string
+        size:
+          type: integer
+          format: int64
+          nullable: true
+        size_str:
+          type: string
+        bot:
+          type: string
+        network:
+          type: string
+        channel:
+          type: string
+        slot:
+          type: integer
+        gets:
+          type: integer
+          nullable: true
+
+    XdccUrl:
+      type: object
+      properties:
+        network:
+          type: string
+        channel:
+          type: string
+        bot:
+          type: string
+        slot:
+          type: integer
+
+    ParseUrlRequest:
+      type: object
+      properties:
+        url:
+          type: string
+
+    ParseUrlResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        url:
+          $ref: '#/components/schemas/XdccUrl'
+        error:
+          type: string
+          nullable: true
+
+    DownloadRequest:
+      type: object
+      properties:
+        url:
+          type: string
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+
+    DownloadResponse:
+      type: object
+      properties:
+        transfer_id:
+          type: string
+        status:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+
+    EnhancedTransfer:
+      type: object
+      properties:
+        transfer:
+          $ref: '#/components/schemas/XdccTransfer'
+        priority:
+          $ref: '#/components/schemas/TransferPriority'
+        retry_count:
+          type: integer
+        max_retries:
+          type: integer
+        queue_position:
+          type: integer
+          nullable: true
+
+    XdccTransfer:
+      type: object
+      properties:
+        id:
+          type: string
+        url:
+          $ref: '#/components/schemas/XdccUrl'
+        filename:
+          type: string
+          nullable: true
+        size:
+          type: integer
+          format: int64
+          nullable: true
+        downloaded:
+          type: integer
+          format: int64
+        speed:
+          type: number
+        progress:
+          type: number
+        status:
+          $ref: '#/components/schemas/TransferStatus'
+        error:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TransferStatus:
+      type: string
+      enum: [pending, connecting, joining, requesting, downloading, completed, failed, cancelled]
+
+    TransferPriority:
+      type: string
+      enum: [low, normal, high, urgent]
+
+    BotStats:
+      type: object
+      properties:
+        bot_name:
+          type: string
+        network:
+          type: string
+        total_downloads:
+          type: integer
+        successful_downloads:
+          type: integer
+        failed_downloads:
+          type: integer
+        total_bytes:
+          type: integer
+          format: int64
+        average_speed:
+          type: number
+        last_seen:
+          type: string
+          format: date-time
+        reliability_score:
+          type: number
+
+    DownloadAnalytics:
+      type: object
+      properties:
+        total_downloads:
+          type: integer
+          format: int64
+        successful_downloads:
+          type: integer
+          format: int64
+        failed_downloads:
+          type: integer
+          format: int64
+        total_bytes_downloaded:
+          type: integer
+          format: int64
+        average_download_speed:
+          type: number
+        total_download_time_seconds:
+          type: integer
+          format: int64
+        most_active_network:
+          type: string
+          nullable: true
+        most_reliable_bot:
+          type: string
+          nullable: true
+
+    BulkDeleteRequest:
+      type: object
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+        delete_files:
+          type: boolean
+          default: false
+
+    BulkDeleteSearchRequest:
+      type: object
+      properties:
+        ids:
+          type: array
+          items:
+            type: integer
+
+    SetPriorityRequest:
+      type: object
+      properties:
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+
+    AppConfig:
+      type: object
+      properties:
+        use_ssl:
+          type: boolean
+        connect_timeout:
+          type: integer
+        general_timeout:
+          type: integer
+        proxy_enabled:
+          type: boolean
+        proxy_url:
+          type: string
+        nickname:
+          type: string
+        username:
+          type: string
+        realname:
+          type: string
+        max_retries:
+          type: integer
+        retry_delay:
+          type: integer
+        queue_limit:
+          type: integer
+        passive_dcc:
+          type: boolean
+        dcc_port_min:
+          type: integer
+        dcc_port_max:
+          type: integer
+        resume_enabled:
+          type: boolean
+        enabled_providers:
+          type: array
+          items:
+            type: string
+        results_per_page:
+          type: integer
+        search_timeout:
+          type: integer
+        networks:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/NetworkConfig'
+
+    NetworkConfig:
+      type: object
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+        ssl:
+          type: boolean
+
+    UpdateSettingsRequest:
+      type: object
+      properties:
+        use_ssl:
+          type: boolean
+        connect_timeout:
+          type: integer
+        general_timeout:
+          type: integer
+        proxy_enabled:
+          type: boolean
+        proxy_url:
+          type: string
+        nickname:
+          type: string
+        username:
+          type: string
+        realname:
+          type: string
+        max_retries:
+          type: integer
+        retry_delay:
+          type: integer
+        queue_limit:
+          type: integer
+        passive_dcc:
+          type: boolean
+        dcc_port_min:
+          type: integer
+        dcc_port_max:
+          type: integer
+        resume_enabled:
+          type: boolean
+        enabled_providers:
+          type: array
+          items:
+            type: string
+        results_per_page:
+          type: integer
+        search_timeout:
+          type: integer
