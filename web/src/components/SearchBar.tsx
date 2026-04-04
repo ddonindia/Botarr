@@ -15,6 +15,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => 
         { id: 'SkullXDCC', name: 'SkullXDCC' },
         { id: 'XDCC.rocks', name: 'XDCC.rocks' },
         { id: 'XDCC.eu', name: 'XDCC.eu' },
+        { id: 'NIBL', name: 'NIBL' },
     ];
 
     const handleSubmit = (e: React.FormEvent) => {
