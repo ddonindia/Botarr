@@ -139,6 +139,7 @@ fn spawn_download_task(
                             v.ssl,
                             v.autojoin_channels.clone(),
                             v.join_delay_secs,
+                            v.nickserv_password.clone(),
                         ),
                     )
                 })

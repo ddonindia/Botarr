@@ -51,8 +51,8 @@ pub struct XdccConfig {
     pub timeout_secs: u64,
     /// Download directory
     pub download_dir: String,
-    /// Network name -> (host, port, ssl, autojoin_channels, join_delay_secs)
-    pub networks: HashMap<String, (String, u16, bool, Vec<String>, u64)>,
+    /// Network name -> (host, port, ssl, autojoin_channels, join_delay_secs, nickserv_password)
+    pub networks: HashMap<String, (String, u16, bool, Vec<String>, u64, String)>,
     /// Enable SOCKS5 proxy
     pub proxy_enabled: bool,
     /// SOCKS5 proxy URL (e.g., socks5://127.0.0.1:1080)
@@ -86,8 +86,8 @@ impl Default for XdccConfig {
 }
 
 impl XdccConfig {
-    /// Resolve network name to (host, port, use_ssl, autojoin_channels, join_delay_secs)
-    pub fn resolve_network(&self, network: &str) -> (String, u16, bool, Vec<String>, u64) {
+    /// Resolve network name to (host, port, use_ssl, autojoin_channels, join_delay_secs, nickserv_password)
+    pub fn resolve_network(&self, network: &str) -> (String, u16, bool, Vec<String>, u64, String) {
         // Check explicit mapping (case-insensitive)
         for (key, value) in &self.networks {
             if key.eq_ignore_ascii_case(network) {
@@ -98,7 +98,14 @@ impl XdccConfig {
         // If it looks like a hostname (contains a dot), use as-is
         if network.contains('.') {
             let port = if self.use_ssl { 6697 } else { 6667 };
-            return (network.to_string(), port, self.use_ssl, Vec::new(), 0);
+            return (
+                network.to_string(),
+                port,
+                self.use_ssl,
+                Vec::new(),
+                0,
+                String::new(),
+            );
         }
 
         // Try common heuristics
@@ -110,6 +117,7 @@ impl XdccConfig {
             self.use_ssl,
             Vec::new(),
             0,
+            String::new(),
         )
     }
 }
@@ -150,8 +158,8 @@ impl XdccClient {
     ) -> Result<(), XdccError> {
         let _ = tx.send(XdccEvent::Connecting).await;
 
-        // Resolve network to (host, port, use_ssl, autojoin, delay)
-        let (host, port, use_ssl, autojoin_channels, join_delay_secs) =
+        // Resolve network to (host, port, use_ssl, autojoin, delay, nickserv_password)
+        let (host, port, use_ssl, autojoin_channels, join_delay_secs, nickserv_password) =
             config.resolve_network(&url.network);
         let server = format!("{}:{}", host, port);
 
@@ -213,6 +221,7 @@ impl XdccClient {
                 tx,
                 autojoin_channels,
                 join_delay_secs,
+                nickserv_password,
             )
             .await
         } else {
@@ -225,6 +234,7 @@ impl XdccClient {
                 tx,
                 autojoin_channels,
                 join_delay_secs,
+                nickserv_password,
             )
             .await
         }
@@ -238,6 +248,7 @@ impl XdccClient {
         tx: mpsc::Sender<XdccEvent>,
         autojoin_channels: Vec<String>,
         join_delay_secs: u64,
+        nickserv_password: String,
     ) -> Result<(), XdccError> {
         let (reader, writer) = stream.into_split();
         let reader = BufReader::new(reader);
@@ -249,6 +260,7 @@ impl XdccClient {
             tx,
             autojoin_channels,
             join_delay_secs,
+            nickserv_password,
         )
         .await
     }
@@ -261,6 +273,7 @@ impl XdccClient {
         tx: mpsc::Sender<XdccEvent>,
         autojoin_channels: Vec<String>,
         join_delay_secs: u64,
+        nickserv_password: String,
     ) -> Result<(), XdccError> {
         let (reader, writer) = tokio::io::split(stream);
         let reader = BufReader::new(reader);
@@ -272,6 +285,7 @@ impl XdccClient {
             tx,
             autojoin_channels,
             join_delay_secs,
+            nickserv_password,
         )
         .await
     }
@@ -285,14 +299,15 @@ impl XdccClient {
         tx: mpsc::Sender<XdccEvent>,
         autojoin_channels: Vec<String>,
         join_delay_secs: u64,
+        nickserv_password: String,
     ) -> Result<(), XdccError>
     where
         R: tokio::io::AsyncRead + Unpin,
         W: tokio::io::AsyncWrite + Unpin,
     {
         // Send NICK and USER commands
-        let nick = &config.nickname;
-        Self::send_raw(&mut writer, &format!("NICK {}", nick)).await?;
+        let mut current_nick = config.nickname.clone();
+        Self::send_raw(&mut writer, &format!("NICK {}", current_nick)).await?;
         Self::send_raw(
             &mut writer,
             &format!("USER {} 0 * :{}", config.username, config.realname),
@@ -335,8 +350,28 @@ impl XdccClient {
                         continue;
                     }
 
+                    // Handle 433 ERR_NICKNAMEINUSE — append _ and retry
+                    if line.contains(" 433 ") {
+                        current_nick.push('_');
+                        tracing::warn!("Nick in use, retrying with: {}", current_nick);
+                        Self::send_raw(&mut writer, &format!("NICK {}", current_nick)).await?;
+                        continue;
+                    }
+
                     // Check for successful connection (001 numeric = RPL_WELCOME)
                     if line.contains(" 001 ") && !joined {
+                        // Identify with NickServ before joining if password is configured
+                        if !nickserv_password.is_empty() {
+                            tracing::info!("Sending NickServ IDENTIFY");
+                            Self::send_raw(
+                                &mut writer,
+                                &format!("PRIVMSG NickServ :IDENTIFY {}", nickserv_password),
+                            )
+                            .await?;
+                            // Small delay to let the server process IDENTIFY before we JOIN
+                            tokio::time::sleep(Duration::from_secs(2)).await;
+                        }
+
                         // Join autojoin channels
                         for channel in &autojoin_channels {
                             tracing::info!("Autojoining extra channel: {}", channel);

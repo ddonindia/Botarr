@@ -23,6 +23,9 @@ pub struct NetworkConfig {
     /// Seconds to wait after joining before requesting download
     #[serde(default = "default_join_delay_secs")]
     pub join_delay_secs: u64,
+    /// NickServ password for automatic IDENTIFY after connect (leave empty to skip)
+    #[serde(default)]
+    pub nickserv_password: String,
 }
 
 /// Complete application configuration
@@ -258,10 +261,11 @@ impl AppConfig {
             "SceneP2P".to_string(),
             NetworkConfig {
                 host: "irc.scenep2p.net".to_string(),
-                port: 6697,
+                port: 9999, // SceneP2P requires port 9999 for SSL
                 ssl: true,
-                autojoin_channels: Vec::new(),
+                autojoin_channels: vec!["#THE.SOURCE.NOSPAM".to_string()],
                 join_delay_secs: 6,
+                nickserv_password: String::new(),
             },
         );
 
@@ -274,6 +278,7 @@ impl AppConfig {
                 ssl: false,
                 autojoin_channels: Vec::new(),
                 join_delay_secs: 6,
+                nickserv_password: String::new(),
             },
         );
 
@@ -285,6 +290,7 @@ impl AppConfig {
                 ssl: false,
                 autojoin_channels: Vec::new(),
                 join_delay_secs: 6,
+                nickserv_password: String::new(),
             },
         );
 

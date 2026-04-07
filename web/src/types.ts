@@ -73,6 +73,7 @@ export interface NetworkConfig {
     ssl: boolean;
     autojoin_channels: string[];
     join_delay_secs: number;
+    nickserv_password: string;
 }
 
 export interface AppConfig {

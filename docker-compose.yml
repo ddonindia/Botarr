@@ -5,7 +5,7 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      - ./downloads:/downloads
+      - /media/mmc/xdcc/:/downloads
       - ~/.config/botarr:/config
     environment:
       - RUST_LOG=botarr=info,api=info,xdcc=info

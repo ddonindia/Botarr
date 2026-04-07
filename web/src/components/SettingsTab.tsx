@@ -103,7 +103,8 @@ export const SettingsTab: React.FC = () => {
             port: 6697,
             ssl: true,
             autojoin_channels: [],
-            join_delay_secs: 6
+            join_delay_secs: 6,
+            nickserv_password: ''
         };
 
         try {
@@ -631,6 +632,19 @@ export const SettingsTab: React.FC = () => {
                                                     className="w-full bg-surface border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-primary/50"
                                                 />
                                             </div>
+                                        </div>
+                                        <div className="mt-3">
+                                            <label className="block text-xs text-muted mb-1">
+                                                NickServ Password <span className="text-muted/60">(optional — leave blank to skip IDENTIFY)</span>
+                                            </label>
+                                            <input
+                                                type="password"
+                                                value={network.nickserv_password ?? ''}
+                                                onChange={e => updateNetwork(name, 'nickserv_password', e.target.value)}
+                                                placeholder="Leave blank if not registered"
+                                                autoComplete="new-password"
+                                                className="w-full bg-surface border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-primary/50"
+                                            />
                                         </div>
                                     </div>
                                 ))}
