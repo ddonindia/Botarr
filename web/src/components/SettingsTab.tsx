@@ -490,7 +490,7 @@ export const SettingsTab: React.FC = () => {
                             <div>
                                 <label className="block text-sm text-secondary mb-3">Enabled Providers</label>
                                 <div className="space-y-2">
-                                    {['SkullXDCC', 'XDCC.rocks', 'XDCC.eu'].map(provider => (
+                                    {['SkullXDCC', 'XDCC.rocks', 'XDCC.eu', 'NIBL'].map(provider => (
                                         <label key={provider} className="flex items-center gap-3">
                                             <input
                                                 type="checkbox"
