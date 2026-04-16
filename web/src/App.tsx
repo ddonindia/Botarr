@@ -102,7 +102,21 @@ function App() {
         showToast("Retrying transfer...", "success");
     };
 
-    // deleted handleDeleteHistory
+    const handleDelete = async (id: string) => {
+        await fetch(`/api/transfers/${id}`, { method: 'DELETE' });
+        fetchUpdates();
+    };
+
+    const handleClearFinished = async () => {
+        const finished = transfers.filter(t =>
+            ['completed', 'failed', 'cancelled'].includes(t.status)
+        );
+        await Promise.all(
+            finished.map(t => fetch(`/api/transfers/${t.id}`, { method: 'DELETE' }))
+        );
+        fetchUpdates();
+        showToast(`Cleared ${finished.length} finished transfer${finished.length !== 1 ? 's' : ''}`, "success");
+    };
 
     return (
         <div className="min-h-screen pb-12 flex flex-col">
@@ -154,7 +168,7 @@ function App() {
                             ).length}
                         />
                         <div className="flex-1 min-h-0">
-                            <TransferList transfers={transfers} onCancel={handleCancel} onRetry={handleRetry} />
+                            <TransferList transfers={transfers} onCancel={handleCancel} onRetry={handleRetry} onDelete={handleDelete} onClearFinished={handleClearFinished} />
                         </div>
                     </div>
                 )}

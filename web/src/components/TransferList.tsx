@@ -1,28 +1,47 @@
 import React from 'react';
 import { XdccTransfer } from '../types';
 import { formatSpeed } from '../utils/format';
-import { X, RefreshCw } from 'lucide-react';
+import { X, RefreshCw, Trash2 } from 'lucide-react';
+
+const FINISHED_STATUSES = ['completed', 'failed', 'cancelled'];
+const ACTIVE_STATUSES = ['pending', 'connecting', 'joining', 'requesting', 'downloading'];
 
 interface TransferListProps {
     transfers: XdccTransfer[];
     onCancel: (id: string) => void;
     onRetry: (id: string) => void;
+    onDelete: (id: string) => void;
+    onClearFinished?: () => void;
 }
 
-export const TransferList: React.FC<TransferListProps & { onRefresh?: () => void }> = ({ transfers, onCancel, onRetry, onRefresh }) => {
+export const TransferList: React.FC<TransferListProps & { onRefresh?: () => void }> = ({ transfers, onCancel, onRetry, onDelete, onClearFinished, onRefresh }) => {
+    const hasFinished = transfers.some(t => FINISHED_STATUSES.includes(t.status));
+
     return (
         <div className="space-y-4">
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-white">Active Transfers</h2>
-                {onRefresh && (
-                    <button
-                        onClick={onRefresh}
-                        className="p-2 hover:bg-white/10 rounded-lg text-secondary hover:text-white transition-colors"
-                        title="Refresh Status"
-                    >
-                        <RefreshCw size={18} />
-                    </button>
-                )}
+                <div className="flex items-center gap-2">
+                    {hasFinished && onClearFinished && (
+                        <button
+                            onClick={onClearFinished}
+                            className="px-3 py-1.5 text-xs font-medium hover:bg-error/20 rounded-lg text-secondary hover:text-error transition-colors flex items-center gap-1.5"
+                            title="Clear all finished transfers"
+                        >
+                            <Trash2 size={14} />
+                            Clear Finished
+                        </button>
+                    )}
+                    {onRefresh && (
+                        <button
+                            onClick={onRefresh}
+                            className="p-2 hover:bg-white/10 rounded-lg text-secondary hover:text-white transition-colors"
+                            title="Refresh Status"
+                        >
+                            <RefreshCw size={18} />
+                        </button>
+                    )}
+                </div>
             </div>
 
             {transfers.length === 0 ? (
@@ -52,8 +71,11 @@ export const TransferList: React.FC<TransferListProps & { onRefresh?: () => void
                                         <span>{Math.round(transfer.progress)}%</span>
                                     </>
                                 )}
-                                {(['pending', 'connecting', 'joining', 'requesting'].includes(transfer.status)) && (
+                                {ACTIVE_STATUSES.includes(transfer.status) && transfer.status !== 'downloading' && (
                                     <span className="text-primary animate-pulse">{transfer.status}...</span>
+                                )}
+                                {transfer.status === 'completed' && (
+                                    <span className="text-info">completed</span>
                                 )}
                             </div>
                         </div>
@@ -65,19 +87,32 @@ export const TransferList: React.FC<TransferListProps & { onRefresh?: () => void
                                         className="h-full bg-primary transition-all duration-500 ease-out"
                                         style={{ width: `${transfer.progress}%` }}
                                     />
-                                ) : (['pending', 'connecting', 'joining', 'requesting'].includes(transfer.status)) && (
+                                ) : transfer.status === 'completed' ? (
+                                    <div className="h-full bg-info w-full" />
+                                ) : ACTIVE_STATUSES.includes(transfer.status) && (
                                     <div className="h-full bg-primary/30 w-full animate-pulse" />
                                 )}
                             </div>
 
-                            {(transfer.status === 'failed' || transfer.status === 'cancelled') ? (
-                                <button
-                                    onClick={() => onRetry(transfer.id)}
-                                    className="p-2 hover:bg-white/10 rounded-lg text-secondary hover:text-white transition-colors"
-                                    title="Retry"
-                                >
-                                    <RefreshCw size={18} />
-                                </button>
+                            {FINISHED_STATUSES.includes(transfer.status) ? (
+                                <div className="flex items-center gap-1">
+                                    {(transfer.status === 'failed' || transfer.status === 'cancelled') && (
+                                        <button
+                                            onClick={() => onRetry(transfer.id)}
+                                            className="p-2 hover:bg-white/10 rounded-lg text-secondary hover:text-white transition-colors"
+                                            title="Retry"
+                                        >
+                                            <RefreshCw size={18} />
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => onDelete(transfer.id)}
+                                        className="p-2 hover:bg-error/20 rounded-lg text-secondary hover:text-error transition-colors"
+                                        title="Remove"
+                                    >
+                                        <X size={18} />
+                                    </button>
+                                </div>
                             ) : (
                                 <button
                                     onClick={() => onCancel(transfer.id)}
