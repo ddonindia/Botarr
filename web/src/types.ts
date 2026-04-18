@@ -95,4 +95,10 @@ export interface AppConfig {
     results_per_page: number;
     search_timeout: number;
     networks: Record<string, NetworkConfig>;
+    // Postprocessing settings
+    move_completed: boolean;
+    move_completed_dir: string;
+    postprocess_script_enabled: boolean;
+    postprocess_script: string;
+    postprocess_timeout: number;
 }

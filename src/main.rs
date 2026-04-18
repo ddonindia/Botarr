@@ -1,6 +1,7 @@
 mod api;
 mod config;
 mod db;
+mod postprocess;
 mod xdcc;
 
 use crate::config::AppConfig;

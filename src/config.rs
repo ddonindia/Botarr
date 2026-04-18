@@ -101,6 +101,23 @@ pub struct AppConfig {
     /// Download directory (set via env, not config file)
     #[serde(skip)]
     pub download_dir: String,
+
+    // === Postprocessing Settings ===
+    /// Enable moving completed downloads to a separate directory
+    #[serde(default)]
+    pub move_completed: bool,
+    /// Directory to move completed downloads to
+    #[serde(default)]
+    pub move_completed_dir: String,
+    /// Enable running a postprocess script on completed downloads
+    #[serde(default)]
+    pub postprocess_script_enabled: bool,
+    /// Path to the postprocess script
+    #[serde(default)]
+    pub postprocess_script: String,
+    /// Timeout for postprocess script in seconds
+    #[serde(default = "default_postprocess_timeout")]
+    pub postprocess_timeout: u64,
 }
 
 // Default value functions
@@ -156,6 +173,9 @@ fn default_search_timeout() -> u64 {
 fn default_join_delay_secs() -> u64 {
     6
 }
+fn default_postprocess_timeout() -> u64 {
+    300
+}
 
 impl Default for AppConfig {
     fn default() -> Self {
@@ -184,6 +204,11 @@ impl Default for AppConfig {
             search_timeout: 30,
             networks: Self::default_networks(),
             download_dir: "./downloads".to_string(),
+            move_completed: false,
+            move_completed_dir: String::new(),
+            postprocess_script_enabled: false,
+            postprocess_script: String::new(),
+            postprocess_timeout: 300,
         }
     }
 }

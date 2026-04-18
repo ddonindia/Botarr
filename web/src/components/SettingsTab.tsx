@@ -413,6 +413,73 @@ export const SettingsTab: React.FC = () => {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Postprocessing Settings */}
+                            <div className="border-t border-white/10 pt-6 mt-6">
+                                <h4 className="text-md font-semibold mb-4 text-secondary">Postprocessing</h4>
+
+                                <div className="space-y-4">
+                                    <label className="flex items-center justify-between">
+                                        <span>Move completed downloads</span>
+                                        <input
+                                            type="checkbox"
+                                            checked={settings.move_completed ?? false}
+                                            onChange={e => updateSetting('move_completed', e.target.checked)}
+                                            className="w-5 h-5 rounded accent-primary"
+                                        />
+                                    </label>
+
+                                    {settings.move_completed && (
+                                        <div>
+                                            <label className="block text-sm text-secondary mb-2">Move to directory</label>
+                                            <input
+                                                type="text"
+                                                value={settings.move_completed_dir ?? ''}
+                                                onChange={e => updateSetting('move_completed_dir', e.target.value)}
+                                                placeholder="/path/to/completed"
+                                                className="w-full bg-surface border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary/50"
+                                            />
+                                        </div>
+                                    )}
+
+                                    <label className="flex items-center justify-between">
+                                        <span>Run postprocess script</span>
+                                        <input
+                                            type="checkbox"
+                                            checked={settings.postprocess_script_enabled ?? false}
+                                            onChange={e => updateSetting('postprocess_script_enabled', e.target.checked)}
+                                            className="w-5 h-5 rounded accent-primary"
+                                        />
+                                    </label>
+
+                                    {settings.postprocess_script_enabled && (
+                                        <>
+                                            <div>
+                                                <label className="block text-sm text-secondary mb-2">Script path</label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.postprocess_script ?? ''}
+                                                    onChange={e => updateSetting('postprocess_script', e.target.value)}
+                                                    placeholder="/path/to/script.sh"
+                                                    className="w-full bg-surface border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary/50"
+                                                />
+                                                <p className="text-xs text-muted mt-1">Script will be called with file path as argument</p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm text-secondary mb-2">Script timeout (seconds)</label>
+                                                <input
+                                                    type="number"
+                                                    value={settings.postprocess_timeout ?? 300}
+                                                    onChange={e => updateSetting('postprocess_timeout', parseInt(e.target.value) || 300)}
+                                                    min={10}
+                                                    max={3600}
+                                                    className="w-full bg-surface border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary/50"
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     )}
 

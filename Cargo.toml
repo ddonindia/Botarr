@@ -45,3 +45,6 @@ native-tls = "0.2"
 
 # SOCKS5 Proxy
 tokio-socks = "0.5"
+
+[dev-dependencies]
+tempfile = "3"

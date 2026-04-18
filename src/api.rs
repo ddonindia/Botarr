@@ -98,6 +98,7 @@ pub struct ErrorResponse {
 // ============= Download Task Helper =============
 
 use crate::config::AppConfig;
+use crate::postprocess::{run_postprocess, PostprocessConfig};
 use crate::xdcc::transfer::EnhancedTransferManager;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -206,8 +207,66 @@ fn spawn_download_task(
                                 }
                                 Some(XdccEvent::Completed) => {
                                     tracing::info!("Download completed for {}", tid);
-                                    let tm = transfer_manager.write().await;
-                                    tm.set_completed(&tid).await;
+
+                                    // Get filename before completing
+                                    let completed_filename = {
+                                        let tm = transfer_manager.read().await;
+                                        if let Some(t) = tm.get_transfer(&tid).await {
+                                            t.transfer.filename.clone()
+                                        } else {
+                                            None
+                                        }
+                                    };
+
+                                    // Mark as completed
+                                    {
+                                        let tm = transfer_manager.write().await;
+                                        tm.set_completed(&tid).await;
+                                    }
+
+                                    // Run postprocessing if configured
+                                    if let Some(filename) = completed_filename {
+                                        let app_config = config.read().await;
+                                        if app_config.move_completed || app_config.postprocess_script_enabled {
+                                            let pp_config = PostprocessConfig {
+                                                move_completed_dir: if app_config.move_completed && !app_config.move_completed_dir.is_empty() {
+                                                    Some(app_config.move_completed_dir.clone())
+                                                } else {
+                                                    None
+                                                },
+                                                script_path: if app_config.postprocess_script_enabled && !app_config.postprocess_script.is_empty() {
+                                                    Some(app_config.postprocess_script.clone())
+                                                } else {
+                                                    None
+                                                },
+                                                script_timeout_secs: app_config.postprocess_timeout,
+                                            };
+                                            drop(app_config);
+
+                                            // Build full path - sanitize filename like delete_history_item does
+                                            let safe_filename = filename.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
+                                            let file_path = std::path::Path::new(&download_dir)
+                                                .join(&safe_filename)
+                                                .to_string_lossy()
+                                                .to_string();
+
+                                            tracing::info!("Running postprocessing on: {}", file_path);
+                                            let result = run_postprocess(&file_path, &pp_config).await;
+
+                                            if !result.errors.is_empty() {
+                                                for err in &result.errors {
+                                                    tracing::warn!("Postprocessing warning: {}", err);
+                                                }
+                                            }
+                                            if let Some(moved_to) = result.moved_to {
+                                                tracing::info!("File moved to: {}", moved_to);
+                                            }
+                                            if let Some(exit_code) = result.script_exit_code {
+                                                tracing::info!("Postprocess script exited with code: {}", exit_code);
+                                            }
+                                        }
+                                    }
+
                                     break;
                                 }
                                 Some(XdccEvent::Error(e)) => {
@@ -714,6 +773,12 @@ pub struct UpdateSettingsRequest {
     pub results_per_page: Option<u32>,
     pub search_timeout: Option<u64>,
     pub networks: Option<std::collections::HashMap<String, NetworkConfig>>,
+    // Postprocessing settings
+    pub move_completed: Option<bool>,
+    pub move_completed_dir: Option<String>,
+    pub postprocess_script_enabled: Option<bool>,
+    pub postprocess_script: Option<String>,
+    pub postprocess_timeout: Option<u64>,
 }
 
 /// Update settings
@@ -780,6 +845,22 @@ async fn update_settings(
     }
     if let Some(v) = req.networks {
         config.networks = v;
+    }
+    // Postprocessing settings
+    if let Some(v) = req.move_completed {
+        config.move_completed = v;
+    }
+    if let Some(v) = req.move_completed_dir {
+        config.move_completed_dir = v;
+    }
+    if let Some(v) = req.postprocess_script_enabled {
+        config.postprocess_script_enabled = v;
+    }
+    if let Some(v) = req.postprocess_script {
+        config.postprocess_script = v;
+    }
+    if let Some(v) = req.postprocess_timeout {
+        config.postprocess_timeout = v.clamp(10, 3600);
     }
 
     // Save to file
