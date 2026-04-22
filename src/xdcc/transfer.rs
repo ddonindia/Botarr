@@ -447,18 +447,18 @@ impl EnhancedTransferManager {
     }
 
     /// Mark transfer as failed with auto-retry
-    pub async fn set_failed(&self, id: &str, error: String) -> bool {
+    pub async fn set_failed(&self, id: &str, error: String, fatal: bool) -> bool {
         let should_retry = {
             let transfers = self.transfers.read().await;
             if let Some(transfer) = transfers.get(id) {
-                transfer.can_retry()
+                !fatal && transfer.can_retry()
             } else {
                 false
             }
         };
 
         if should_retry {
-            tracing::info!("Transfer {} failed, will retry", id);
+            tracing::info!("Transfer {} failed (retryable), will retry", id);
             self.retry_transfer(id).await
         } else {
             let mut transfers = self.transfers.write().await;

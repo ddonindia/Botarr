@@ -31,7 +31,7 @@ pub enum XdccEvent {
         speed: f64,
     },
     Completed,
-    Error(String),
+    Error(XdccError),
 }
 
 /// Configuration for XDCC client
@@ -51,12 +51,14 @@ pub struct XdccConfig {
     pub timeout_secs: u64,
     /// Download directory
     pub download_dir: String,
-    /// Network name to (host, port, ssl) mapping
-    pub networks: HashMap<String, (String, u16, bool)>,
+    /// Network name -> (host, port, ssl, autojoin_channels, join_delay_secs)
+    pub networks: HashMap<String, (String, u16, bool, Vec<String>, u64)>,
     /// Enable SOCKS5 proxy
     pub proxy_enabled: bool,
     /// SOCKS5 proxy URL (e.g., socks5://127.0.0.1:1080)
     pub proxy_url: String,
+    /// Enable DCC Resume
+    pub resume_enabled: bool,
 }
 
 impl Default for XdccConfig {
@@ -78,13 +80,14 @@ impl Default for XdccConfig {
             networks: HashMap::new(),
             proxy_enabled: false,
             proxy_url: String::new(),
+            resume_enabled: true,
         }
     }
 }
 
 impl XdccConfig {
-    /// Resolve network name to (host, port, use_ssl)
-    pub fn resolve_network(&self, network: &str) -> (String, u16, bool) {
+    /// Resolve network name to (host, port, use_ssl, autojoin_channels, join_delay_secs)
+    pub fn resolve_network(&self, network: &str) -> (String, u16, bool, Vec<String>, u64) {
         // Check explicit mapping (case-insensitive)
         for (key, value) in &self.networks {
             if key.eq_ignore_ascii_case(network) {
@@ -95,13 +98,19 @@ impl XdccConfig {
         // If it looks like a hostname (contains a dot), use as-is
         if network.contains('.') {
             let port = if self.use_ssl { 6697 } else { 6667 };
-            return (network.to_string(), port, self.use_ssl);
+            return (network.to_string(), port, self.use_ssl, Vec::new(), 0);
         }
 
         // Try common heuristics
         let lower = network.to_lowercase();
         let port = if self.use_ssl { 6697 } else { 6667 };
-        (format!("irc.{}.net", lower), port, self.use_ssl)
+        (
+            format!("irc.{}.net", lower),
+            port,
+            self.use_ssl,
+            Vec::new(),
+            0,
+        )
     }
 }
 
@@ -127,7 +136,7 @@ impl XdccClient {
         tokio::spawn(async move {
             if let Err(e) = Self::download_task(url, config, tx.clone()).await {
                 tracing::error!("XDCC download failed: {}", e);
-                let _ = tx.send(XdccEvent::Error(e.to_string())).await;
+                let _ = tx.send(XdccEvent::Error(e)).await;
             }
         });
 
@@ -141,8 +150,9 @@ impl XdccClient {
     ) -> Result<(), XdccError> {
         let _ = tx.send(XdccEvent::Connecting).await;
 
-        // Resolve network to (host, port, use_ssl)
-        let (host, port, use_ssl) = config.resolve_network(&url.network);
+        // Resolve network to (host, port, use_ssl, autojoin, delay)
+        let (host, port, use_ssl, autojoin_channels, join_delay_secs) =
+            config.resolve_network(&url.network);
         let server = format!("{}:{}", host, port);
 
         tracing::info!("Connecting to IRC server: {} (SSL: {})", server, use_ssl);
@@ -196,11 +206,27 @@ impl XdccClient {
             let _ = tx.send(XdccEvent::Connected).await;
 
             // Run IRC session over TLS
-            Self::irc_session_tls(tls_stream, url, config, tx).await
+            Self::irc_session_tls(
+                tls_stream,
+                url,
+                config,
+                tx,
+                autojoin_channels,
+                join_delay_secs,
+            )
+            .await
         } else {
             let _ = tx.send(XdccEvent::Connected).await;
             // Run IRC session over plain TCP
-            Self::irc_session_plain(tcp_stream, url, config, tx).await
+            Self::irc_session_plain(
+                tcp_stream,
+                url,
+                config,
+                tx,
+                autojoin_channels,
+                join_delay_secs,
+            )
+            .await
         }
     }
 
@@ -210,10 +236,21 @@ impl XdccClient {
         url: XdccUrl,
         config: XdccConfig,
         tx: mpsc::Sender<XdccEvent>,
+        autojoin_channels: Vec<String>,
+        join_delay_secs: u64,
     ) -> Result<(), XdccError> {
         let (reader, writer) = stream.into_split();
         let reader = BufReader::new(reader);
-        Self::irc_session_inner(reader, writer, url, config, tx).await
+        Self::irc_session_inner(
+            reader,
+            writer,
+            url,
+            config,
+            tx,
+            autojoin_channels,
+            join_delay_secs,
+        )
+        .await
     }
 
     /// IRC session over TLS
@@ -222,10 +259,21 @@ impl XdccClient {
         url: XdccUrl,
         config: XdccConfig,
         tx: mpsc::Sender<XdccEvent>,
+        autojoin_channels: Vec<String>,
+        join_delay_secs: u64,
     ) -> Result<(), XdccError> {
         let (reader, writer) = tokio::io::split(stream);
         let reader = BufReader::new(reader);
-        Self::irc_session_inner(reader, writer, url, config, tx).await
+        Self::irc_session_inner(
+            reader,
+            writer,
+            url,
+            config,
+            tx,
+            autojoin_channels,
+            join_delay_secs,
+        )
+        .await
     }
 
     /// Core IRC session logic (works with any AsyncRead/AsyncWrite)
@@ -235,6 +283,8 @@ impl XdccClient {
         url: XdccUrl,
         config: XdccConfig,
         tx: mpsc::Sender<XdccEvent>,
+        autojoin_channels: Vec<String>,
+        join_delay_secs: u64,
     ) -> Result<(), XdccError>
     where
         R: tokio::io::AsyncRead + Unpin,
@@ -251,6 +301,7 @@ impl XdccClient {
 
         let mut joined = false;
         let mut requested = false;
+        let mut pending_resume: Option<DccResumeInfo> = None;
         let mut buf = Vec::with_capacity(1024);
 
         loop {
@@ -286,7 +337,13 @@ impl XdccClient {
 
                     // Check for successful connection (001 numeric = RPL_WELCOME)
                     if line.contains(" 001 ") && !joined {
-                        tracing::info!("Received welcome, joining channel {}", url.channel);
+                        // Join autojoin channels
+                        for channel in &autojoin_channels {
+                            tracing::info!("Autojoining extra channel: {}", channel);
+                            Self::send_raw(&mut writer, &format!("JOIN {}", channel)).await?;
+                        }
+
+                        tracing::info!("Received welcome, joining target channel {}", url.channel);
                         let _ = tx.send(XdccEvent::Joining(url.channel.clone())).await;
                         Self::send_raw(&mut writer, &format!("JOIN {}", url.channel)).await?;
                     }
@@ -298,6 +355,15 @@ impl XdccClient {
                         joined = true;
                         tracing::info!("Joined channel {}", url.channel);
                         let _ = tx.send(XdccEvent::Joined(url.channel.clone())).await;
+
+                        // Wait if join delay is configured
+                        if join_delay_secs > 0 {
+                            tracing::info!(
+                                "Waiting {}s after join before requesting...",
+                                join_delay_secs
+                            );
+                            tokio::time::sleep(Duration::from_secs(join_delay_secs)).await;
+                        }
                     }
 
                     // After joining, send XDCC request
@@ -324,6 +390,54 @@ impl XdccClient {
                                 dcc_info.port,
                                 dcc_info.size
                             );
+
+                            // Check if file exists and we should resume
+                            if config.resume_enabled {
+                                let safe_filename = dcc_info
+                                    .filename
+                                    .replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
+                                let file_path =
+                                    std::path::Path::new(&config.download_dir).join(&safe_filename);
+
+                                if file_path.exists() {
+                                    if let Ok(metadata) = tokio::fs::metadata(&file_path).await {
+                                        let current_size = metadata.len();
+                                        if current_size > 0 && current_size < dcc_info.size {
+                                            tracing::info!(
+                                                "Found partial file {}, attempting resume from {}",
+                                                safe_filename,
+                                                current_size
+                                            );
+
+                                            // Send DCC RESUME
+                                            // Format: PRIVMSG bot :\x01DCC RESUME "filename" port position\x01
+                                            // Quote filename if it contains spaces
+                                            let quoted_filename = if dcc_info.filename.contains(' ')
+                                            {
+                                                format!("\"{}\"", dcc_info.filename)
+                                            } else {
+                                                dcc_info.filename.clone()
+                                            };
+                                            let resume_msg = format!(
+                                                "\x01DCC RESUME {} {} {}\x01",
+                                                quoted_filename, dcc_info.port, current_size
+                                            );
+                                            Self::send_raw(
+                                                &mut writer,
+                                                &format!("PRIVMSG {} :{}", url.bot, resume_msg),
+                                            )
+                                            .await?;
+
+                                            pending_resume = Some(DccResumeInfo {
+                                                dcc_info,
+                                                offset: current_size,
+                                            });
+                                            continue;
+                                        }
+                                    }
+                                }
+                            }
+
                             let _ = tx
                                 .send(XdccEvent::DccSend {
                                     filename: dcc_info.filename.clone(),
@@ -333,8 +447,9 @@ impl XdccClient {
                                 })
                                 .await;
 
-                            // Start DCC transfer
-                            Self::dcc_receive(dcc_info, &config.download_dir, tx.clone()).await?;
+                            // Start DCC transfer (new file)
+                            Self::dcc_receive(dcc_info, &config.download_dir, 0, tx.clone())
+                                .await?;
 
                             // Quit IRC after transfer
                             Self::send_raw(&mut writer, "QUIT :Transfer complete").await?;
@@ -343,19 +458,70 @@ impl XdccClient {
                         }
                     }
 
+                    // Check for DCC ACCEPT
+                    if line.contains("DCC ACCEPT") {
+                        if let Some(resume_info) = pending_resume.take() {
+                            // Parse ACCEPT to verify: :bot PRIVMSG nick :\x01DCC ACCEPT filename port position\x01
+                            // For now we assume if we get an ACCEPT it matches what we asked for (simplification)
+                            tracing::info!("Received DCC ACCEPT, resuming download...");
+
+                            let _ = tx
+                                .send(XdccEvent::DccSend {
+                                    filename: resume_info.dcc_info.filename.clone(),
+                                    ip: resume_info.dcc_info.ip.clone(),
+                                    port: resume_info.dcc_info.port,
+                                    size: resume_info.dcc_info.size,
+                                })
+                                .await;
+
+                            // Start DCC transfer (resume)
+                            Self::dcc_receive(
+                                resume_info.dcc_info,
+                                &config.download_dir,
+                                resume_info.offset,
+                                tx.clone(),
+                            )
+                            .await?;
+
+                            Self::send_raw(&mut writer, "QUIT :Transfer complete").await?;
+                            let _ = tx.send(XdccEvent::Completed).await;
+                            return Ok(());
+                        }
+                    }
+
                     // Check for errors
-                    if line.contains("No such nick")
-                        || line.contains("is not online")
-                        || line.contains("Invalid Pack Number")
-                        || line.contains("You already requested")
-                        || line.contains("Closing Link")
-                    {
-                        return Err(XdccError::TransferFailed(format!("Server error: {}", line)));
+                    if line.contains("No such nick") || line.contains("is not online") {
+                        return Err(XdccError::BotBusy(format!(
+                            "Bot is offline or invalid: {}",
+                            line
+                        )));
+                    }
+                    if line.contains("Invalid Pack Number") {
+                        return Err(XdccError::InvalidPack(format!(
+                            "Invalid pack number: {}",
+                            line
+                        )));
+                    }
+                    if line.contains("You already requested") {
+                        return Err(XdccError::BotBusy(format!("Already requested: {}", line)));
+                    }
+                    if line.contains("Closing Link") {
+                        return Err(XdccError::ConnectionFailed(format!(
+                            "Connection closed: {}",
+                            line
+                        )));
                     }
 
                     // Check for NOTICE messages from bot
                     if line.contains("NOTICE") && line.contains(&config.nickname) {
                         tracing::info!("Bot notice: {}", line);
+                        // Some bots send error messages via NOTICE too
+                        if line.contains("Invalid Pack Number") {
+                            return Err(XdccError::InvalidPack(format!(
+                                "Invalid pack number (notice): {}",
+                                line
+                            )));
+                        }
                     }
                 }
                 Ok(Err(e)) => {
@@ -369,6 +535,29 @@ impl XdccClient {
                     }
                     if !requested {
                         continue;
+                    }
+                    // If we're waiting for DCC ACCEPT but timed out, fall back to fresh download
+                    if let Some(resume_info) = pending_resume.take() {
+                        tracing::warn!("DCC ACCEPT not received, falling back to fresh download");
+                        let _ = tx
+                            .send(XdccEvent::DccSend {
+                                filename: resume_info.dcc_info.filename.clone(),
+                                ip: resume_info.dcc_info.ip.clone(),
+                                port: resume_info.dcc_info.port,
+                                size: resume_info.dcc_info.size,
+                            })
+                            .await;
+                        // Start fresh download (offset 0)
+                        Self::dcc_receive(
+                            resume_info.dcc_info,
+                            &config.download_dir,
+                            0,
+                            tx.clone(),
+                        )
+                        .await?;
+                        Self::send_raw(&mut writer, "QUIT :Transfer complete").await?;
+                        let _ = tx.send(XdccEvent::Completed).await;
+                        return Ok(());
                     }
                     return Err(XdccError::Timeout(
                         "Timed out waiting for DCC response from bot".into(),
@@ -444,9 +633,12 @@ impl XdccClient {
     async fn dcc_receive(
         info: DccInfo,
         download_dir: &str,
+        seek_offset: u64,
         tx: mpsc::Sender<XdccEvent>,
     ) -> Result<(), XdccError> {
-        use tokio::fs::File;
+        use std::io::SeekFrom;
+        use tokio::fs::OpenOptions;
+        use tokio::io::AsyncSeekExt;
 
         let addr = format!("{}:{}", info.ip, info.port);
         tracing::info!("Connecting to DCC: {} for file: {}", addr, info.filename);
@@ -465,13 +657,27 @@ impl XdccClient {
             .replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
         let file_path = format!("{}/{}", download_dir, safe_filename);
 
-        let mut file = File::create(&file_path)
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(seek_offset == 0) // Only truncate if starting fresh
+            .open(&file_path)
             .await
-            .map_err(|e| XdccError::TransferFailed(format!("Failed to create file: {}", e)))?;
+            .map_err(|e| XdccError::TransferFailed(format!("Failed to create/open file: {}", e)))?;
+
+        if seek_offset > 0 {
+            tracing::info!("Resuming file at offset {}", seek_offset);
+            if let Err(e) = file.seek(SeekFrom::Start(seek_offset)).await {
+                return Err(XdccError::TransferFailed(format!(
+                    "Failed to seek file: {}",
+                    e
+                )));
+            }
+        }
 
         tracing::info!("Saving to: {}", file_path);
 
-        let mut downloaded: u64 = 0;
+        let mut downloaded: u64 = seek_offset;
         let mut buf = [0u8; 16384];
         let mut last_update = std::time::Instant::now();
         let mut bytes_since_update: u64 = 0;
@@ -562,4 +768,9 @@ struct DccInfo {
     ip: String,
     port: u16,
     size: u64,
+}
+
+struct DccResumeInfo {
+    dcc_info: DccInfo,
+    offset: u64,
 }

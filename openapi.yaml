@@ -653,6 +653,13 @@ components:
           type: integer
         ssl:
           type: boolean
+        autojoin_channels:
+          type: array
+          items:
+            type: string
+        join_delay_secs:
+          type: integer
+          format: int64
 
     UpdateSettingsRequest:
       type: object

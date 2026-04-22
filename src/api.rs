@@ -214,10 +214,22 @@ pub async fn xdcc_download(
             networks: app_config
                 .networks
                 .iter()
-                .map(|(k, v)| (k.clone(), (v.host.clone(), v.port, v.ssl)))
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        (
+                            v.host.clone(),
+                            v.port,
+                            v.ssl,
+                            v.autojoin_channels.clone(),
+                            v.join_delay_secs,
+                        ),
+                    )
+                })
                 .collect(),
             proxy_enabled: app_config.proxy_enabled,
             proxy_url: app_config.proxy_url.clone(),
+            resume_enabled: app_config.resume_enabled,
         };
         drop(app_config); // Release lock before async operations
 
@@ -283,7 +295,7 @@ pub async fn xdcc_download(
                                 Some(XdccEvent::Error(e)) => {
                                     tracing::error!("Download error for {}: {}", tid, e);
                                     let tm = transfer_manager.write().await;
-                                    tm.set_failed(&tid, e).await;
+                                    tm.set_failed(&tid, e.to_string(), e.is_fatal()).await;
                                     break;
                                 }
                                 None => break, // Channel closed
@@ -296,7 +308,7 @@ pub async fn xdcc_download(
             Err(e) => {
                 tracing::error!("Failed to start download {}: {}", tid, e);
                 let tm = transfer_manager.write().await;
-                tm.set_failed(&tid, e.to_string()).await;
+                tm.set_failed(&tid, e.to_string(), e.is_fatal()).await;
             }
         }
         tracing::info!("Download task finished for {}", tid);

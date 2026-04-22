@@ -163,13 +163,36 @@ pub enum XdccError {
     ChannelJoinFailed(String),
     TransferFailed(String),
     SearchFailed(String),
+    InvalidPack(String),
+    BotBusy(String),
+    NickInUse(String),
     Timeout(String),
+}
+
+impl XdccError {
+    /// Check if the error is fatal (should not be retried)
+    pub fn is_fatal(&self) -> bool {
+        match self {
+            XdccError::InvalidUrl(_) => true,
+            XdccError::InvalidPack(_) => true,
+            XdccError::NickInUse(_) => false, // Can retry with new nick
+            XdccError::BotBusy(_) => false,   // Can retry later
+            XdccError::ConnectionFailed(_) => false,
+            XdccError::ChannelJoinFailed(_) => false,
+            XdccError::TransferFailed(_) => false,
+            XdccError::SearchFailed(_) => false,
+            XdccError::Timeout(_) => false,
+        }
+    }
 }
 
 impl fmt::Display for XdccError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             XdccError::InvalidUrl(msg) => write!(f, "Invalid URL: {}", msg),
+            XdccError::InvalidPack(msg) => write!(f, "Invalid Pack: {}", msg),
+            XdccError::BotBusy(msg) => write!(f, "Bot Busy: {}", msg),
+            XdccError::NickInUse(msg) => write!(f, "Nickname in use: {}", msg),
             XdccError::ConnectionFailed(msg) => write!(f, "Connection failed: {}", msg),
             XdccError::ChannelJoinFailed(msg) => write!(f, "Channel join failed: {}", msg),
             XdccError::TransferFailed(msg) => write!(f, "Transfer failed: {}", msg),
