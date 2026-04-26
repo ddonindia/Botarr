@@ -589,7 +589,7 @@ impl EnhancedTransferManager {
     pub async fn list_transfers(&self) -> Vec<EnhancedTransfer> {
         let transfers = self.transfers.read().await;
         let mut list: Vec<_> = transfers.values().cloned().collect();
-        list.sort_by(|a, b| b.transfer.created_at.cmp(&a.transfer.created_at));
+        list.sort_by_key(|b| std::cmp::Reverse(b.transfer.created_at));
         list
     }
 

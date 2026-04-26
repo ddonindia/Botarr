@@ -5,7 +5,7 @@
 use super::{XdccError, XdccUrl};
 use std::collections::HashMap;
 use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
@@ -39,6 +39,9 @@ pub enum XdccEvent {
 
 /// Configuration for XDCC client
 #[derive(Debug, Clone)]
+/// Network configuration alias: (host, port, ssl, autojoin_channels, join_delay_secs, nickserv_password)
+pub type NetworkConfig = (String, u16, bool, Vec<String>, u64, String);
+
 pub struct XdccConfig {
     /// Nickname to use on IRC
     pub nickname: String,
@@ -55,7 +58,7 @@ pub struct XdccConfig {
     /// Download directory
     pub download_dir: String,
     /// Network name -> (host, port, ssl, autojoin_channels, join_delay_secs, nickserv_password)
-    pub networks: HashMap<String, (String, u16, bool, Vec<String>, u64, String)>,
+    pub networks: HashMap<String, NetworkConfig>,
     /// Enable SOCKS5 proxy
     pub proxy_enabled: bool,
     /// SOCKS5 proxy URL (e.g., socks5://127.0.0.1:1080)
@@ -90,7 +93,7 @@ impl Default for XdccConfig {
 
 impl XdccConfig {
     /// Resolve network name to (host, port, use_ssl, autojoin_channels, join_delay_secs, nickserv_password)
-    pub fn resolve_network(&self, network: &str) -> (String, u16, bool, Vec<String>, u64, String) {
+    pub fn resolve_network(&self, network: &str) -> NetworkConfig {
         // Check explicit mapping (case-insensitive)
         for (key, value) in &self.networks {
             if key.eq_ignore_ascii_case(network) || value.0.eq_ignore_ascii_case(network) {
@@ -301,6 +304,7 @@ impl XdccClient {
     }
 
     /// Core IRC session logic (works with any AsyncRead/AsyncWrite)
+    #[allow(clippy::too_many_arguments)]
     async fn irc_session_inner<R, W>(
         mut reader: BufReader<R>,
         mut writer: W,
