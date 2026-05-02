@@ -125,6 +125,21 @@ export const HistoryTab: React.FC = () => {
         }
     };
 
+    const handleClearAllSearches = async () => {
+        if (!window.confirm(`Are you sure you want to clear ALL search history?`)) return;
+
+        try {
+            await fetch('/api/search-history', { method: 'DELETE' });
+            setSearches([]);
+            setSearchTotal(0);
+            setSearchPage(1);
+            setSearchTotalPages(1);
+            setSelectedSearches(new Set());
+        } catch (e) {
+            console.error('Failed to clear all search history:', e);
+        }
+    };
+
     const handleDownload = async (result: any) => {
         const url = `irc://${result.server}/${result.channel}/${result.bot}/${result.pack_number}`;
         try {
@@ -255,6 +270,13 @@ export const HistoryTab: React.FC = () => {
                                     Delete Selected ({selectedSearches.size})
                                 </button>
                             )}
+                            <button
+                                onClick={handleClearAllSearches}
+                                disabled={searchTotal === 0}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-medium ${searchTotal > 0 ? 'bg-error/20 text-error hover:bg-error/30' : 'bg-white/5 text-secondary opacity-50 cursor-not-allowed'}`}
+                            >
+                                Clear All
+                            </button>
                             <button onClick={fetchSearchHistory} className="p-2 text-secondary hover:text-white">
                                 <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                             </button>

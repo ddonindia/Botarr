@@ -7,6 +7,7 @@
 //! - DCC file transfer with progress tracking
 
 mod client;
+pub mod monitor;
 mod search;
 pub mod transfer;
 
@@ -109,6 +110,7 @@ pub struct XdccSearchResult {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum TransferStatus {
+    Paused,
     Pending,
     Connecting,
     Joining,

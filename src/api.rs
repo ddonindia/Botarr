@@ -32,7 +32,10 @@ pub fn routes() -> Router<AppState> {
             axum::routing::delete(xdcc_delete_history),
         )
         .route("/api/history/bulk", post(xdcc_bulk_delete_history))
-        .route("/api/search-history", get(xdcc_search_history))
+        .route(
+            "/api/search-history",
+            get(xdcc_search_history).delete(xdcc_clear_search_history),
+        )
         .route(
             "/api/search-history/{id}",
             axum::routing::delete(xdcc_delete_search_history),
@@ -42,6 +45,8 @@ pub fn routes() -> Router<AppState> {
             post(xdcc_bulk_delete_search_history),
         )
         .route("/api/queue", get(xdcc_queue_status))
+        .route("/api/plugins/status", get(get_plugin_status))
+        .route("/api/irc/ws", get(irc_ws_handler))
         // Settings API
         .route("/api/settings", get(get_settings).put(update_settings))
         .route("/api/settings/networks", get(get_networks))
@@ -95,6 +100,16 @@ pub struct ErrorResponse {
     pub error: String,
 }
 
+use std::collections::HashMap;
+
+#[derive(Debug, Serialize)]
+pub struct PluginStatusResponse {
+    pub loaded_scripts: Vec<String>,
+    pub logs: HashMap<String, Vec<String>>,
+    pub active_monitors: Vec<crate::xdcc::monitor::MonitorStatus>,
+    pub raw_irc_logs: Vec<String>,
+}
+
 // ============= Download Task Helper =============
 
 use crate::config::AppConfig;
@@ -106,13 +121,14 @@ use tokio_util::sync::CancellationToken;
 
 /// Spawn a download task for the given transfer
 /// This handles the download loop and automatically spawns retry tasks when needed
-fn spawn_download_task(
+pub fn spawn_download_task(
     tid: String,
     url: XdccUrl,
     cancel_token: CancellationToken,
     download_dir: String,
     transfer_manager: Arc<RwLock<EnhancedTransferManager>>,
     config: Arc<RwLock<AppConfig>>,
+    plugin_manager: Arc<crate::plugin::PluginManager>,
 ) {
     tokio::spawn(async move {
         tracing::info!("Starting XDCC download task for {}", tid);
@@ -194,8 +210,9 @@ fn spawn_download_task(
                                 Some(XdccEvent::DccSend { filename, size, ip, port }) => {
                                     tracing::info!("DCC SEND from {}:{} - {} ({} bytes)", ip, port, filename, size);
                                     let tm = transfer_manager.write().await;
-                                    tm.set_file_info(&tid, filename, size).await;
+                                    tm.set_file_info(&tid, filename.clone(), size).await;
                                     tm.update_status(&tid, TransferStatus::Downloading).await;
+                                    plugin_manager.emit_signal("download_started", crate::plugin::EventData::String(filename));
                                 }
                                 Some(XdccEvent::Progress { downloaded, total, speed }) => {
                                     let tm = transfer_manager.write().await;
@@ -223,6 +240,9 @@ fn spawn_download_task(
                                     {
                                         let tm = transfer_manager.write().await;
                                         tm.set_completed(&tid).await;
+                                    }
+                                    if let Some(filename) = completed_filename.clone() {
+                                        plugin_manager.emit_signal("download_completed", crate::plugin::EventData::String(filename));
                                     }
 
                                     // Run postprocessing if configured
@@ -272,9 +292,16 @@ fn spawn_download_task(
                                 }
                                 Some(XdccEvent::Error(e)) => {
                                     tracing::error!("Download error for {}: {}", tid, e);
+                                    plugin_manager.emit_signal("download_failed", crate::plugin::EventData::String(format!("{}", e)));
                                     let tm = transfer_manager.write().await;
                                     retry_info = tm.set_failed(&tid, e.to_string(), e.is_fatal()).await;
                                     break;
+                                }
+                                Some(XdccEvent::IrcMessage(network, channel, nick, message)) => {
+                                    plugin_manager.emit_signal("irc_message", crate::plugin::EventData::Tuple4(network, channel, nick, message));
+                                }
+                                Some(XdccEvent::IrcNotice(nick, message)) => {
+                                    plugin_manager.emit_signal("irc_notice", crate::plugin::EventData::Tuple2(nick, message));
                                 }
                                 None => break, // Channel closed
                                 _ => {}
@@ -302,6 +329,7 @@ fn spawn_download_task(
                 download_dir,
                 transfer_manager,
                 config,
+                plugin_manager.clone(),
             );
         } else {
             tracing::info!("Download task finished for {}", tid);
@@ -402,7 +430,7 @@ pub async fn xdcc_download(
     // Create transfer tracking with cancellation token
     let (transfer_id, cancel_token) = {
         let tm = state.transfer_manager.write().await;
-        tm.create_transfer(url.clone(), priority).await
+        tm.create_transfer(url.clone(), priority, false).await
     };
 
     // Clone what we need for the background task
@@ -419,6 +447,7 @@ pub async fn xdcc_download(
         download_dir,
         transfer_manager,
         config,
+        state.plugin_manager.clone(),
     );
 
     Json(DownloadResponse {
@@ -551,8 +580,14 @@ pub async fn xdcc_analytics(State(state): State<AppState>) -> impl IntoResponse 
 /// GET /api/history?limit=100
 #[derive(Debug, Deserialize)]
 pub struct HistoryRequest {
+    #[serde(default = "default_history_page")]
+    pub page: i64,
     #[serde(default = "default_history_limit")]
     pub limit: usize,
+}
+
+fn default_history_page() -> i64 {
+    1
 }
 
 fn default_history_limit() -> usize {
@@ -563,9 +598,22 @@ pub async fn xdcc_history(
     State(state): State<AppState>,
     axum::extract::Query(params): axum::extract::Query<HistoryRequest>,
 ) -> impl IntoResponse {
-    let tm = state.transfer_manager.read().await;
-    let history = tm.get_history(params.limit).await;
-    Json(serde_json::json!({ "history": history, "count": history.len() }))
+    match state
+        .database
+        .list_downloads(params.page, params.limit as i64)
+    {
+        Ok(history) => Json(history).into_response(),
+        Err(e) => {
+            tracing::error!("Failed to fetch download history: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Database error: {}", e),
+                }),
+            )
+                .into_response()
+        }
+    }
 }
 
 /// Get queue status
@@ -687,6 +735,25 @@ pub async fn xdcc_search_history(
 ) -> impl IntoResponse {
     match state.database.list_searches(params.page, params.limit) {
         Ok(response) => Json(response).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Database error: {}", e),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+/// Clear all search history
+/// DELETE /api/search-history
+pub async fn xdcc_clear_search_history(State(state): State<AppState>) -> impl IntoResponse {
+    match state.database.clear_search_history() {
+        Ok(deleted) => Json(serde_json::json!({
+            "status": "cleared",
+            "deleted": deleted
+        }))
+        .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -917,4 +984,77 @@ async fn delete_network(
     } else {
         Json(serde_json::json!({ "status": "error", "message": "Network not found" }))
     }
+}
+
+// ============= Plugins API =============
+
+pub async fn get_plugin_status(State(state): State<AppState>) -> Json<PluginStatusResponse> {
+    let loaded_scripts = state.plugin_manager.loaded_scripts.read().unwrap().clone();
+
+    let mut logs = HashMap::new();
+    {
+        let logs_map = state.plugin_manager.recent_logs.read().unwrap();
+        for (k, v) in logs_map.iter() {
+            logs.insert(k.clone(), v.iter().cloned().collect());
+        }
+    }
+
+    let active_monitors_lock = state.irc_monitor.active_monitors.clone();
+    let active_monitors = active_monitors_lock.read().await.clone();
+
+    let raw_irc_logs_lock = state.irc_monitor.raw_logs.clone();
+    let raw_irc_logs = raw_irc_logs_lock.read().await.iter().cloned().collect();
+
+    Json(PluginStatusResponse {
+        loaded_scripts,
+        logs,
+        active_monitors,
+        raw_irc_logs,
+    })
+}
+
+// ============= WebSocket IRC Client =============
+
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use futures::{sink::SinkExt, stream::StreamExt};
+
+pub async fn irc_ws_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    ws.on_upgrade(|socket| handle_irc_socket(socket, state))
+}
+
+async fn handle_irc_socket(socket: WebSocket, state: AppState) {
+    let (mut sender, mut receiver) = socket.split();
+    let mut rx = state.irc_client_manager.ws_tx.subscribe();
+    let client_manager = state.irc_client_manager.clone();
+
+    // Spawn a task to receive messages from the IRC manager and send to the WebSocket
+    let mut send_task = tokio::spawn(async move {
+        while let Ok(msg) = rx.recv().await {
+            if let Ok(json) = serde_json::to_string(&msg) {
+                if sender.send(Message::Text(json.into())).await.is_err() {
+                    break;
+                }
+            }
+        }
+    });
+
+    // Spawn a task to receive messages from the WebSocket and send to the IRC manager
+    let mut recv_task = tokio::spawn(async move {
+        while let Some(Ok(msg)) = receiver.next().await {
+            if let Message::Text(text) = msg {
+                if let Ok(cmd) = serde_json::from_str::<crate::irc_client::WsCommand>(&text) {
+                    client_manager.handle_command(cmd).await;
+                }
+            }
+        }
+    });
+
+    // If any one of the tasks exit, abort the other.
+    tokio::select! {
+        _ = (&mut send_task) => recv_task.abort(),
+        _ = (&mut recv_task) => send_task.abort(),
+    };
 }

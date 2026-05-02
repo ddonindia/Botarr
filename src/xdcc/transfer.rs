@@ -168,6 +168,8 @@ pub struct EnhancedTransferManager {
     max_history: usize,
     /// Download directory for deletion support
     download_dir: String,
+    /// Database connection for history persistence
+    database: Option<Arc<crate::db::Database>>,
 }
 
 impl EnhancedTransferManager {
@@ -181,6 +183,41 @@ impl EnhancedTransferManager {
             analytics: Arc::new(RwLock::new(DownloadAnalytics::default())),
             max_history: 50,
             download_dir,
+            database: None,
+        }
+    }
+
+    /// Set database connection
+    pub fn set_database(&mut self, database: Arc<crate::db::Database>) {
+        self.database = Some(database);
+    }
+
+    /// Save transfer to database
+    fn save_to_database(&self, enhanced_transfer: &EnhancedTransfer) {
+        if let Some(db) = &self.database {
+            let transfer = &enhanced_transfer.transfer;
+            let record = crate::db::DownloadRecord {
+                id: transfer.id.clone(),
+                file_name: transfer.filename.clone(),
+                size: transfer.size.map(|s| s as i64),
+                network: transfer.url.network.clone(),
+                bot: transfer.url.bot.clone(),
+                channel: transfer.url.channel.clone(),
+                slot: transfer.url.slot,
+                priority: match enhanced_transfer.priority {
+                    TransferPriority::Low => "low".to_string(),
+                    TransferPriority::Normal => "normal".to_string(),
+                    TransferPriority::High => "high".to_string(),
+                    TransferPriority::Urgent => "urgent".to_string(),
+                },
+                status: format!("{:?}", transfer.status),
+                error: transfer.error.clone(),
+                created_at: transfer.created_at.to_rfc3339(),
+                completed_at: transfer.updated_at.to_rfc3339(),
+            };
+            if let Err(e) = db.insert_download(&record) {
+                tracing::error!("Failed to save download history to database: {}", e);
+            }
         }
     }
 
@@ -189,6 +226,7 @@ impl EnhancedTransferManager {
         &self,
         url: XdccUrl,
         priority: TransferPriority,
+        start_paused: bool,
     ) -> (String, CancellationToken) {
         let id = Uuid::new_v4().to_string();
         let transfer = XdccTransfer::new(id.clone(), url);
@@ -199,7 +237,7 @@ impl EnhancedTransferManager {
 
         {
             let mut transfers = self.transfers.write().await;
-            transfers.insert(id.clone(), enhanced);
+            transfers.insert(id.clone(), enhanced.clone());
         }
 
         {
@@ -207,8 +245,17 @@ impl EnhancedTransferManager {
             tokens.insert(id.clone(), token.clone());
         }
 
-        // Add to queue
-        self.add_to_queue(id.clone(), priority).await;
+        if start_paused {
+            let mut transfers = self.transfers.write().await;
+            if let Some(t) = transfers.get_mut(&id) {
+                t.transfer.status = TransferStatus::Paused;
+            }
+        } else {
+            // Add to queue
+            self.add_to_queue(id.clone(), priority).await;
+        }
+
+        self.save_to_database(&enhanced);
 
         (id, token)
     }
@@ -400,6 +447,8 @@ impl EnhancedTransferManager {
             transfer.transfer.status = status.clone();
             transfer.transfer.updated_at = Utc::now();
 
+            self.save_to_database(transfer);
+
             // Move to history if completed/failed
             if matches!(status, TransferStatus::Completed | TransferStatus::Failed) {
                 let t = transfer.transfer.clone();
@@ -520,6 +569,7 @@ impl EnhancedTransferManager {
 
             self.record_bot_failure(&bot, &network).await;
             self.update_analytics(&transfer.transfer, false).await;
+            self.save_to_database(&transfer);
         }
 
         let mut tokens = self.cancel_tokens.write().await;
@@ -548,6 +598,8 @@ impl EnhancedTransferManager {
                     transfer.transfer.speed,
                     transfer.transfer.clone(),
                 );
+
+                self.save_to_database(transfer);
 
                 // Remove from active transfers
                 transfers.remove(id);
@@ -683,6 +735,65 @@ impl EnhancedTransferManager {
 
         tracing::warn!("History item {} not found", id);
         false
+    }
+    /// Restore incomplete transfers from the database
+    pub async fn restore_incomplete_transfers(&self) -> Vec<(String, XdccUrl, CancellationToken)> {
+        let mut restored = Vec::new();
+
+        if let Some(db) = &self.database {
+            if let Ok(records) = db.get_incomplete_downloads() {
+                for record in records {
+                    let priority = match record.priority.as_str() {
+                        "low" => TransferPriority::Low,
+                        "high" => TransferPriority::High,
+                        "urgent" => TransferPriority::Urgent,
+                        _ => TransferPriority::Normal,
+                    };
+
+                    let url = XdccUrl {
+                        network: record.network,
+                        channel: record.channel,
+                        bot: record.bot,
+                        slot: record.slot,
+                    };
+
+                    let transfer = XdccTransfer {
+                        id: record.id.clone(),
+                        url: url.clone(),
+                        status: TransferStatus::Pending,
+                        filename: record.file_name,
+                        size: record.size.map(|s| s as u64),
+                        downloaded: 0,
+                        speed: 0.0,
+                        progress: 0.0,
+                        error: None,
+                        created_at: chrono::DateTime::parse_from_rfc3339(&record.created_at)
+                            .unwrap_or_else(|_| Utc::now().into())
+                            .into(),
+                        updated_at: Utc::now(),
+                    };
+
+                    let mut enhanced = EnhancedTransfer::new(transfer);
+                    enhanced.priority = priority;
+
+                    let token = CancellationToken::new();
+
+                    {
+                        let mut transfers = self.transfers.write().await;
+                        transfers.insert(record.id.clone(), enhanced);
+                    }
+                    {
+                        let mut tokens = self.cancel_tokens.write().await;
+                        tokens.insert(record.id.clone(), token.clone());
+                    }
+
+                    self.add_to_queue(record.id.clone(), priority).await;
+                    restored.push((record.id, url, token));
+                }
+            }
+        }
+
+        restored
     }
 }
 

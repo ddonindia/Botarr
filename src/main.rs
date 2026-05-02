@@ -1,6 +1,8 @@
 mod api;
 mod config;
 mod db;
+mod irc_client;
+mod plugin;
 mod postprocess;
 mod xdcc;
 
@@ -28,6 +30,9 @@ pub struct AppState {
     pub download_dir: String,
     pub database: Arc<db::Database>,
     pub config: Arc<RwLock<AppConfig>>,
+    pub plugin_manager: Arc<plugin::PluginManager>,
+    pub irc_monitor: Arc<xdcc::monitor::IrcMonitor>,
+    pub irc_client_manager: Arc<irc_client::InteractiveClientManager>,
 }
 
 #[tokio::main]
@@ -64,13 +69,79 @@ async fn main() -> anyhow::Result<()> {
         app_config.networks.len()
     );
 
+    let database = Arc::new(database);
+    let mut tm = TransferManager::new(download_dir.clone());
+    tm.set_database(database.clone());
+    let _restored_transfers = tm.restore_incomplete_transfers().await;
+
+    // Initialize Plugin Manager
+    let (plugin_manager, mut plugin_rx) = match plugin::PluginManager::new() {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!("Failed to init plugin manager: {:?}", e);
+            std::process::exit(1);
+        }
+    };
+    let plugin_manager = Arc::new(plugin_manager);
+
+    let plugins_dir = std::path::Path::new("plugins");
+    std::fs::create_dir_all(plugins_dir).unwrap_or_default();
+    plugin_manager.load_scripts(plugins_dir);
+
+    let irc_monitor = Arc::new(xdcc::monitor::IrcMonitor::new(
+        Arc::new(RwLock::new(app_config.clone())),
+        plugin_manager.clone(),
+    ));
+
+    let irc_client_manager = Arc::new(irc_client::InteractiveClientManager::new());
+
     let state = AppState {
         search_aggregator: Arc::new(SearchAggregator::with_default_providers(None)),
-        transfer_manager: Arc::new(RwLock::new(TransferManager::new(download_dir.clone()))),
-        download_dir,
-        database: Arc::new(database),
+        transfer_manager: Arc::new(RwLock::new(tm)),
+        download_dir: download_dir.clone(),
+        database: database.clone(),
         config: Arc::new(RwLock::new(app_config)),
+        plugin_manager: plugin_manager.clone(),
+        irc_monitor: irc_monitor.clone(),
+        irc_client_manager: irc_client_manager.clone(),
     };
+
+    // Handle plugin actions
+    let monitor_clone = irc_monitor.clone();
+    let tm_clone = state.transfer_manager.clone();
+    tokio::spawn(async move {
+        while let Some(action) = plugin_rx.recv().await {
+            match action {
+                plugin::PluginAction::MonitorChannel(plugin_name, network, channel) => {
+                    monitor_clone.start_monitoring(plugin_name, network, channel);
+                }
+                plugin::PluginAction::Download(url) => {
+                    let lock = tm_clone.read().await;
+                    if let Ok(xdcc_url) = crate::xdcc::XdccUrl::parse(&url) {
+                        let _ = lock
+                            .create_transfer(
+                                xdcc_url,
+                                crate::xdcc::transfer::TransferPriority::Normal,
+                                false,
+                            )
+                            .await;
+                    }
+                }
+                plugin::PluginAction::Queue(url) => {
+                    let lock = tm_clone.read().await;
+                    if let Ok(xdcc_url) = crate::xdcc::XdccUrl::parse(&url) {
+                        let _ = lock
+                            .create_transfer(
+                                xdcc_url,
+                                crate::xdcc::transfer::TransferPriority::Normal,
+                                true,
+                            )
+                            .await;
+                    }
+                }
+            }
+        }
+    });
 
     // Build router
     let app = Router::new()

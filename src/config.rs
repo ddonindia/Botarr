@@ -301,7 +301,7 @@ impl AppConfig {
     pub fn resolve_network(&self, network: &str) -> (String, u16, bool, Vec<String>, u64) {
         // Check explicit mapping (case-insensitive)
         for (key, config) in &self.networks {
-            if key.eq_ignore_ascii_case(network) {
+            if key.eq_ignore_ascii_case(network) || config.host.eq_ignore_ascii_case(network) {
                 return (
                     config.host.clone(),
                     config.port,

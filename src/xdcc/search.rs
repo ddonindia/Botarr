@@ -81,6 +81,11 @@ impl SearchAggregator {
             }
         }
 
+        // Filter scenep2p bots with |P|
+        all_results.retain(|r| {
+            !(r.network.to_lowercase().contains("scenep2p") && r.bot.to_lowercase().contains("|p|"))
+        });
+
         // Deduplicate by URL
         let mut seen = std::collections::HashSet::new();
         all_results.retain(|r| seen.insert(r.url.clone()));

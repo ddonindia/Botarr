@@ -22,6 +22,8 @@ pub struct DownloadRecord {
     pub network: String,
     pub bot: String,
     pub channel: String,
+    pub slot: i32,
+    pub priority: String,
     pub status: String,
     pub error: Option<String>,
     pub created_at: String,
@@ -98,6 +100,16 @@ impl Database {
             [],
         );
 
+        // Migration: add slot and priority columns to download_history if they don't exist
+        let _ = conn.execute(
+            "ALTER TABLE download_history ADD COLUMN slot INTEGER DEFAULT 0",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE download_history ADD COLUMN priority TEXT DEFAULT 'normal'",
+            [],
+        );
+
         // Create indexes for faster queries
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_download_completed_at ON download_history(completed_at DESC)",
@@ -118,8 +130,8 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         conn.execute(
             "INSERT OR REPLACE INTO download_history 
-             (id, file_name, size, network, bot, channel, status, error, created_at, completed_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+             (id, file_name, size, network, bot, channel, slot, priority, status, error, created_at, completed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 record.id,
                 record.file_name,
@@ -127,6 +139,8 @@ impl Database {
                 record.network,
                 record.bot,
                 record.channel,
+                record.slot,
+                record.priority,
                 record.status,
                 record.error,
                 record.created_at,
@@ -151,7 +165,7 @@ impl Database {
 
         let offset = (page - 1) * limit;
         let mut stmt = conn.prepare(
-            "SELECT id, file_name, size, network, bot, channel, status, error, created_at, completed_at
+            "SELECT id, file_name, size, network, bot, channel, slot, priority, status, error, created_at, completed_at
              FROM download_history
              ORDER BY completed_at DESC
              LIMIT ?1 OFFSET ?2"
@@ -166,10 +180,12 @@ impl Database {
                     network: row.get(3)?,
                     bot: row.get(4)?,
                     channel: row.get(5)?,
-                    status: row.get(6)?,
-                    error: row.get(7)?,
-                    created_at: row.get(8)?,
-                    completed_at: row.get(9)?,
+                    slot: row.get(6)?,
+                    priority: row.get(7)?,
+                    status: row.get(8)?,
+                    error: row.get(9)?,
+                    created_at: row.get(10)?,
+                    completed_at: row.get(11)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -183,6 +199,37 @@ impl Database {
             limit,
             total_pages,
         })
+    }
+
+    /// Get all incomplete downloads
+    pub fn get_incomplete_downloads(&self) -> SqliteResult<Vec<DownloadRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, file_name, size, network, bot, channel, slot, priority, status, error, created_at, completed_at
+             FROM download_history
+             WHERE status NOT IN ('Completed', 'Failed', 'Cancelled')"
+        )?;
+
+        let items = stmt
+            .query_map([], |row| {
+                Ok(DownloadRecord {
+                    id: row.get(0)?,
+                    file_name: row.get(1)?,
+                    size: row.get(2)?,
+                    network: row.get(3)?,
+                    bot: row.get(4)?,
+                    channel: row.get(5)?,
+                    slot: row.get(6)?,
+                    priority: row.get(7)?,
+                    status: row.get(8)?,
+                    error: row.get(9)?,
+                    created_at: row.get(10)?,
+                    completed_at: row.get(11)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(items)
     }
 
     /// Delete a download record

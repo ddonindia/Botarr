@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { SearchBar } from './components/SearchBar';
 import { StatsBar } from './components/StatsBar';
 import { TransferList } from './components/TransferList';
 import { HistoryTab } from './components/HistoryTab';
+import { PluginsTab } from './components/PluginsTab';
+import { IrcClientTab } from './components/IrcClientTab';
 import { SettingsTab } from './components/SettingsTab';
 import { Toast } from './components/Toast';
 import { Tabs } from './components/Tabs';
@@ -10,13 +12,17 @@ import { SearchResults } from './components/SearchResults';
 import { useToast } from './hooks/useToast';
 import { XdccSearchResult, XdccTransfer, BotStats } from './types';
 
+type TabType = 'search' | 'activities' | 'history' | 'plugins' | 'client' | 'settings';
+
 function App() {
-    const [activeTab, setActiveTab] = useState<'search' | 'activities' | 'history' | 'settings'>('search');
+    const [activeTab, setActiveTab] = useState<TabType>('search');
     const [searchResults, setSearchResults] = useState<XdccSearchResult[]>([]);
     const [transfers, setTransfers] = useState<XdccTransfer[]>([]);
     const [stats, setStats] = useState<BotStats[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [queueSize, setQueueSize] = useState(0);
+    const [downloadQueue, setDownloadQueue] = useState<XdccSearchResult[]>([]);
+    const isProcessingQueueRef = useRef(false);
 
     const { toast, showToast, hideToast } = useToast();
 
@@ -24,6 +30,36 @@ function App() {
         const interval = setInterval(fetchUpdates, 1000);
         return () => clearInterval(interval);
     }, []);
+
+    useEffect(() => {
+        const activeDownloads = transfers.filter(t =>
+            ['downloading', 'connecting', 'joining', 'requesting', 'pending'].includes(t.status)
+        ).length;
+
+        if (activeDownloads === 0 && downloadQueue.length > 0 && !isProcessingQueueRef.current) {
+            isProcessingQueueRef.current = true;
+            const nextItem = downloadQueue[0];
+            
+            const url = `irc://${nextItem.server}/${nextItem.channel}/${nextItem.bot}/${nextItem.pack_number}`;
+            fetch('/api/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            }).then(() => {
+                setDownloadQueue(prev => prev.slice(1));
+                showToast("Started queued download", "success");
+                fetchUpdates();
+                setTimeout(() => {
+                    isProcessingQueueRef.current = false;
+                }, 1500);
+            }).catch(e => {
+                console.error("Download start failed", e);
+                showToast("Failed to start queued download", "error");
+                setDownloadQueue(prev => prev.slice(1));
+                isProcessingQueueRef.current = false;
+            });
+        }
+    }, [transfers, downloadQueue]);
 
     const fetchUpdates = async () => {
         try {
@@ -82,12 +118,15 @@ function App() {
             });
             showToast("Download started", "success");
             fetchUpdates();
-            // Optional: Switch to activities tab on download start
-            // setActiveTab('activities'); 
         } catch (e) {
             console.error("Download start failed", e);
             showToast("Failed to start download", "error");
         }
+    };
+
+    const handleQueueDownload = (result: XdccSearchResult) => {
+        setDownloadQueue(prev => [...prev, result]);
+        showToast("Added to download queue", "success");
     };
 
     const handleCancel = async (id: string) => {
@@ -153,7 +192,16 @@ function App() {
                         <SearchBar onSearch={handleSearch} isLoading={isLoading} />
 
                         {searchResults.length > 0 && (
-                            <SearchResults results={searchResults} onDownload={handleDownload} />
+                            <SearchResults 
+                                results={searchResults} 
+                                onDownload={handleDownload} 
+                                onQueueDownload={handleQueueDownload}
+                            />
+                        )}
+                        {downloadQueue.length > 0 && (
+                            <div className="mt-4 text-center text-sm text-secondary">
+                                {downloadQueue.length} item(s) in local download queue.
+                            </div>
                         )}
                     </div>
                 )}
@@ -162,7 +210,7 @@ function App() {
                     <div className="flex flex-col gap-6 h-full overflow-hidden animate-fade-in">
                         <StatsBar
                             stats={stats}
-                            queueSize={queueSize}
+                            queueSize={queueSize + downloadQueue.length}
                             activeDownloads={transfers.filter(t =>
                                 ['downloading', 'connecting', 'joining', 'requesting'].includes(t.status)
                             ).length}
@@ -177,9 +225,9 @@ function App() {
                     <HistoryTab />
                 )}
 
-                {activeTab === 'settings' && (
-                    <SettingsTab />
-                )}
+                {activeTab === 'plugins' && <PluginsTab />}
+                {activeTab === 'client' && <IrcClientTab />}
+                {activeTab === 'settings' && <SettingsTab />}
             </main>
 
             {toast.visible && (

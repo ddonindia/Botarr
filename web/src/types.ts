@@ -13,7 +13,7 @@ export interface SearchResponse {
     count: number;
 }
 
-export type TransferStatus = 'pending' | 'connecting' | 'joining' | 'requesting' | 'downloading' | 'completed' | 'failed' | 'cancelled';
+export type TransferStatus = 'pending' | 'connecting' | 'joining' | 'requesting' | 'downloading' | 'completed' | 'failed' | 'cancelled' | 'paused';
 export type TransferPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 export interface XdccTransfer {

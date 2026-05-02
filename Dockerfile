@@ -46,5 +46,6 @@ EXPOSE 3001
 ENV RUST_LOG=botarr=info,api=info,xdcc=info
 ENV BOTARR_DOWNLOAD_DIR=/downloads
 ENV BOTARR_CONFIG_FILE=/config/config.json
+ENV BOTARR_DB_PATH=/config/botarr.db
 
 CMD ["botarr"]

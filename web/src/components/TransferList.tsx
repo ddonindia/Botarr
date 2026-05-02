@@ -1,10 +1,10 @@
 import React from 'react';
 import { XdccTransfer } from '../types';
 import { formatSpeed } from '../utils/format';
-import { X, RefreshCw, Trash2 } from 'lucide-react';
+import { X, RefreshCw, Trash2, Play } from 'lucide-react';
 
 const FINISHED_STATUSES = ['completed', 'failed', 'cancelled'];
-const ACTIVE_STATUSES = ['pending', 'connecting', 'joining', 'requesting', 'downloading'];
+const ACTIVE_STATUSES = ['pending', 'connecting', 'joining', 'requesting', 'downloading', 'paused'];
 
 interface TransferListProps {
     transfers: XdccTransfer[];
@@ -89,6 +89,8 @@ export const TransferList: React.FC<TransferListProps & { onRefresh?: () => void
                                     />
                                 ) : transfer.status === 'completed' ? (
                                     <div className="h-full bg-info w-full" />
+                                ) : transfer.status === 'paused' ? (
+                                    <div className="h-full bg-secondary/50 w-full" />
                                 ) : ACTIVE_STATUSES.includes(transfer.status) && (
                                     <div className="h-full bg-primary/30 w-full animate-pulse" />
                                 )}
@@ -109,6 +111,23 @@ export const TransferList: React.FC<TransferListProps & { onRefresh?: () => void
                                         onClick={() => onDelete(transfer.id)}
                                         className="p-2 hover:bg-error/20 rounded-lg text-secondary hover:text-error transition-colors"
                                         title="Remove"
+                                    >
+                                        <X size={18} />
+                                    </button>
+                                </div>
+                            ) : transfer.status === 'paused' ? (
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => onRetry(transfer.id)}
+                                        className="p-2 hover:bg-success/20 rounded-lg text-secondary hover:text-success transition-colors"
+                                        title="Start Transfer"
+                                    >
+                                        <Play size={18} fill="currentColor" />
+                                    </button>
+                                    <button
+                                        onClick={() => onCancel(transfer.id)}
+                                        className="p-2 hover:bg-error/20 rounded-lg text-secondary hover:text-error transition-colors"
+                                        title="Cancel"
                                     >
                                         <X size={18} />
                                     </button>
@@ -136,6 +155,7 @@ function getStatusColor(status: string) {
         case 'completed': return 'bg-info';
         case 'failed': return 'bg-error';
         case 'cancelled': return 'bg-secondary';
+        case 'paused': return 'bg-yellow-500';
         default: return 'bg-warning';
     }
 }

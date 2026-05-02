@@ -31,6 +31,8 @@ pub enum XdccEvent {
         speed: f64,
     },
     Completed,
+    IrcMessage(String, String, String, String), // network, channel, nick, message
+    IrcNotice(String, String),                  // nick, message
     Error(XdccError),
 }
 
@@ -90,7 +92,7 @@ impl XdccConfig {
     pub fn resolve_network(&self, network: &str) -> (String, u16, bool, Vec<String>, u64, String) {
         // Check explicit mapping (case-insensitive)
         for (key, value) in &self.networks {
-            if key.eq_ignore_ascii_case(network) {
+            if key.eq_ignore_ascii_case(network) || value.0.eq_ignore_ascii_case(network) {
                 return value.clone();
             }
         }
@@ -318,17 +320,44 @@ impl XdccClient {
         let mut requested = false;
         let mut pending_resume: Option<DccResumeInfo> = None;
         let mut buf = Vec::with_capacity(1024);
+        let mut joined_at: Option<std::time::Instant> = None;
 
         loop {
+            // Check if we should request NOW (before reading)
+            if joined && !requested {
+                if let Some(t) = joined_at {
+                    if t.elapsed().as_secs() >= join_delay_secs {
+                        requested = true;
+                        tracing::info!("Requesting pack #{} from {}", url.slot, url.bot);
+                        let _ = tx
+                            .send(XdccEvent::Requesting(url.bot.clone(), url.slot))
+                            .await;
+                        Self::send_raw(
+                            &mut writer,
+                            &format!("PRIVMSG {} :xdcc send #{}", url.bot, url.slot),
+                        )
+                        .await?;
+                    }
+                }
+            }
+
             buf.clear();
+
+            let mut current_timeout = Duration::from_secs(config.timeout_secs);
+            if joined && !requested {
+                if let Some(t) = joined_at {
+                    let elapsed = t.elapsed().as_secs();
+                    if elapsed < join_delay_secs {
+                        current_timeout = Duration::from_secs(join_delay_secs - elapsed);
+                    } else {
+                        current_timeout = Duration::from_millis(10);
+                    }
+                }
+            }
 
             // Read line as bytes (until \n) with timeout
             // This handles non-UTF-8 IRC data gracefully
-            let read_result = timeout(
-                Duration::from_secs(config.timeout_secs),
-                reader.read_until(b'\n', &mut buf),
-            )
-            .await;
+            let read_result = timeout(current_timeout, reader.read_until(b'\n', &mut buf)).await;
 
             // Convert bytes to string with lossy UTF-8 handling
             let line = String::from_utf8_lossy(&buf);
@@ -388,6 +417,7 @@ impl XdccClient {
                         && !joined
                     {
                         joined = true;
+                        joined_at = Some(std::time::Instant::now());
                         tracing::info!("Joined channel {}", url.channel);
                         let _ = tx.send(XdccEvent::Joined(url.channel.clone())).await;
 
@@ -397,22 +427,7 @@ impl XdccClient {
                                 "Waiting {}s after join before requesting...",
                                 join_delay_secs
                             );
-                            tokio::time::sleep(Duration::from_secs(join_delay_secs)).await;
                         }
-                    }
-
-                    // After joining, send XDCC request
-                    if joined && !requested {
-                        requested = true;
-                        tracing::info!("Requesting pack #{} from {}", url.slot, url.bot);
-                        let _ = tx
-                            .send(XdccEvent::Requesting(url.bot.clone(), url.slot))
-                            .await;
-                        Self::send_raw(
-                            &mut writer,
-                            &format!("PRIVMSG {} :xdcc send #{}", url.bot, url.slot),
-                        )
-                        .await?;
                     }
 
                     // Check for DCC SEND (CTCP)
@@ -547,7 +562,25 @@ impl XdccClient {
                         )));
                     }
 
-                    // Check for NOTICE messages from bot
+                    // Parse PRIVMSG and NOTICE for plugins
+                    if line.contains("PRIVMSG") || line.contains("NOTICE") {
+                        if let Some((nick, cmd, target, msg)) = Self::parse_irc_message(line) {
+                            if cmd == "PRIVMSG" && !msg.starts_with("\x01") {
+                                let _ = tx
+                                    .send(XdccEvent::IrcMessage(
+                                        url.network.clone(),
+                                        target,
+                                        nick,
+                                        msg,
+                                    ))
+                                    .await;
+                            } else if cmd == "NOTICE" {
+                                let _ = tx.send(XdccEvent::IrcNotice(nick, msg)).await;
+                            }
+                        }
+                    }
+
+                    // Check for NOTICE messages from bot (legacy error handling)
                     if line.contains("NOTICE") && line.contains(&config.nickname) {
                         tracing::info!("Bot notice: {}", line);
                         // Some bots send error messages via NOTICE too
@@ -663,6 +696,39 @@ impl XdccClient {
             port,
             size,
         })
+    }
+
+    /// Parse a generic IRC message
+    /// Format: :nick!user@host CMD target :message
+    fn parse_irc_message(line: &str) -> Option<(String, String, String, String)> {
+        if !line.starts_with(':') {
+            return None;
+        }
+
+        let space1 = line.find(' ')?;
+        let prefix = &line[1..space1];
+
+        let nick = if let Some(bang) = prefix.find('!') {
+            prefix[..bang].to_string()
+        } else {
+            prefix.to_string()
+        };
+
+        let rest = &line[space1 + 1..];
+        let space2 = rest.find(' ')?;
+        let cmd = rest[..space2].to_string();
+
+        let rest2 = &rest[space2 + 1..];
+
+        let (target, msg) = if let Some(colon) = rest2.find(" :") {
+            (rest2[..colon].to_string(), rest2[colon + 2..].to_string())
+        } else {
+            // No message part?
+            let space3 = rest2.find(' ').unwrap_or(rest2.len());
+            (rest2[..space3].to_string(), String::new())
+        };
+
+        Some((nick, cmd, target, msg))
     }
 
     async fn dcc_receive(

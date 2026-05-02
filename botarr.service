@@ -1,0 +1,33 @@
+[Unit]
+Description=Botarr XDCC Search & Download Manager
+After=network.target
+Documentation=https://github.com/ddonindia/Botarr
+
+[Service]
+Type=simple
+# Update User and Group to the user running the service
+User=botarr
+Group=botarr
+# Adjust WorkingDirectory to match your installation path
+WorkingDirectory=/opt/botarr
+
+# Environment Variables
+Environment="RUST_LOG=botarr=info,api=info,xdcc=info,info"
+# Uncomment and adjust paths to customize storage locations
+# Environment="BOTARR_DOWNLOAD_DIR=/opt/botarr/downloads/"
+# Environment="BOTARR_DB_PATH=/opt/botarr/data/botarr.db"
+# Environment="BOTARR_CONFIG_FILE=/opt/botarr/config/config.json"
+
+# Botarr executable
+# Adjust ExecStart to point to your compiled botarr executable
+ExecStart=/opt/botarr/botarr
+
+# Restart policy
+Restart=always
+RestartSec=3
+
+# Prevent running out of file descriptors
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

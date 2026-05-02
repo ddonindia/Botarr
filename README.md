@@ -26,6 +26,7 @@ Botarr is a high-performance, self-hosted XDCC manager that brings a modern touc
 - **Privacy First**: Integrated SOCKS5 proxy support to keep your traffic anonymous.
 - **Beautiful UI**: A clean, glassmorphism-inspired dashboard with real-time stats and progress tracking.
 - **Power Settings**: Comprehensive web-based configuration for connections, identity, and behavior.
+- **Lua Plugin System**: Extensible Irssi-style scripting via Lua to automate workflows (e.g., Autodl). See [docs/plugin.md](docs/plugin.md).
 - **Docker-Ready**: Easy deployment with a tiny footprint.
 
 ## Quick Start
