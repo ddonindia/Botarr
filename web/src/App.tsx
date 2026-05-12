@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { SearchBar } from './components/SearchBar';
 import { StatsBar } from './components/StatsBar';
 import { TransferList } from './components/TransferList';
@@ -142,6 +142,12 @@ function App() {
         showToast("Retrying transfer...", "success");
     };
 
+    const handleResume = async (id: string) => {
+        await fetch(`/api/transfers/${id}/resume`, { method: 'POST' });
+        fetchUpdates();
+        showToast("Starting transfer...", "success");
+    };
+
     const handleDelete = async (id: string) => {
         await fetch(`/api/transfers/${id}`, { method: 'DELETE' });
         fetchUpdates();
@@ -217,7 +223,7 @@ function App() {
                             ).length}
                         />
                         <div className="flex-1 min-h-0">
-                            <TransferList transfers={transfers} onCancel={handleCancel} onRetry={handleRetry} onDelete={handleDelete} onClearFinished={handleClearFinished} />
+                            <TransferList transfers={transfers} onCancel={handleCancel} onRetry={handleRetry} onResume={handleResume} onDelete={handleDelete} onClearFinished={handleClearFinished} />
                         </div>
                     </div>
                 )}

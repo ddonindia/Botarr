@@ -29,6 +29,10 @@ pub fn routes() -> Router<AppState> {
             post(handlers::downloads::xdcc_retry_transfer),
         )
         .route(
+            "/api/transfers/{id}/resume",
+            post(handlers::downloads::xdcc_resume_transfer),
+        )
+        .route(
             "/api/transfers/{id}/priority",
             post(handlers::downloads::xdcc_set_priority),
         )

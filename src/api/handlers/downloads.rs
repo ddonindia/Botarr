@@ -307,35 +307,20 @@ pub async fn xdcc_download(
 
     let result = {
         let tm = state.transfer_manager.write().await;
-        tm.create_transfer(url.clone(), priority, false, req.filename.clone())
+        tm.create_transfer(url.clone(), priority, true, req.filename.clone())
             .await
     };
 
-    let (transfer_id, cancel_token) = match result {
+    let (transfer_id, _cancel_token) = match result {
         Ok(res) => res,
         Err(e) => {
             return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response()
         }
     };
 
-    let download_dir = state.download_dir.clone();
-    let transfer_manager = state.transfer_manager.clone();
-    let config = state.config.clone();
-    let tid = transfer_id.clone();
-
-    spawn_download_task(
-        tid,
-        url,
-        cancel_token,
-        download_dir,
-        transfer_manager,
-        config,
-        state.plugin_manager.clone(),
-    );
-
     Json(DownloadResponse {
         transfer_id,
-        status: "started".to_string(),
+        status: "paused".to_string(),
     })
     .into_response()
 }
@@ -393,6 +378,24 @@ pub async fn xdcc_retry_transfer(
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
                 error: "Cannot retry transfer".to_string(),
+            }),
+        )
+            .into_response()
+    }
+}
+
+pub async fn xdcc_resume_transfer(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let tm = state.transfer_manager.write().await;
+    if tm.resume_transfer(&id).await {
+        Json(serde_json::json!({"status": "resumed", "transfer_id": id})).into_response()
+    } else {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Cannot resume transfer".to_string(),
             }),
         )
             .into_response()

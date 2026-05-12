@@ -11,11 +11,12 @@ interface TransferListProps {
     transfers: XdccTransfer[];
     onCancel: (id: string) => void;
     onRetry: (id: string) => void;
+    onResume: (id: string) => void;
     onDelete: (id: string) => void;
     onClearFinished?: () => void;
 }
 
-export const TransferList: React.FC<TransferListProps & { onRefresh?: () => void }> = ({ transfers, onCancel, onRetry, onDelete, onClearFinished, onRefresh }) => {
+export const TransferList: React.FC<TransferListProps & { onRefresh?: () => void }> = ({ transfers, onCancel, onRetry, onResume, onDelete, onClearFinished, onRefresh }) => {
     const hasFinished = transfers.some(t => FINISHED_STATUSES.includes(t.status));
     const [selectedTransfer, setSelectedTransfer] = React.useState<XdccTransfer | null>(null);
     const [filter, setFilter] = React.useState<'all' | 'active' | 'pending' | 'paused'>('all');
@@ -157,7 +158,7 @@ export const TransferList: React.FC<TransferListProps & { onRefresh?: () => void
                             ) : transfer.status === 'paused' ? (
                                 <div className="flex items-center gap-1">
                                     <button
-                                        onClick={() => onRetry(transfer.id)}
+                                        onClick={() => onResume(transfer.id)}
                                         className="p-2 hover:bg-success/20 rounded-lg text-secondary hover:text-success transition-colors"
                                         title="Start Transfer"
                                     >

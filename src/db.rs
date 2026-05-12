@@ -232,6 +232,35 @@ impl Database {
         Ok(items)
     }
 
+    /// Check if a URL has already been downloaded (or attempted)
+    pub fn is_url_downloaded(
+        &self,
+        network: &str,
+        bot: &str,
+        channel: &str,
+        slot: i32,
+    ) -> SqliteResult<bool> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT count(*) FROM download_history 
+             WHERE network = ?1 AND bot = ?2 AND channel = ?3 AND slot = ?4",
+        )?;
+        let count: i64 = stmt.query_row(params![network, bot, channel, slot], |row| row.get(0))?;
+        Ok(count > 0)
+    }
+
+    /// Get all downloaded file names for smart duplicate checking
+    pub fn get_all_download_filenames(&self) -> SqliteResult<Vec<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT file_name FROM download_history WHERE file_name IS NOT NULL",
+        )?;
+        let items = stmt
+            .query_map([], |row| row.get(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(items)
+    }
+
     /// Get a single download record
     pub fn get_download(&self, id: &str) -> SqliteResult<Option<DownloadRecord>> {
         let conn = self.conn.lock().unwrap();

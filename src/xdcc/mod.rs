@@ -8,6 +8,7 @@
 
 mod client;
 pub mod monitor;
+pub mod providers;
 mod search;
 pub mod transfer;
 
