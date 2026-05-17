@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { formatBytes } from '../utils/format';
 import { useToast } from '../hooks/useToast';
-import { Search, Download, Trash2, X, ChevronLeft, ChevronRight, CheckSquare, Square, RefreshCw } from 'lucide-react';
+import { Search, Download, Trash2, X, ChevronLeft, ChevronRight, CheckSquare, Square, RefreshCw, Terminal } from 'lucide-react';
+import { TransferLogsModal } from './TransferLogsModal';
 
 interface SearchHistoryItem {
     id: number;
@@ -17,6 +18,7 @@ interface DownloadHistoryItem {
     size?: number;
     network: string;
     bot: string;
+    slot?: number;
     status: string;
     completed_at: string;
 }
@@ -50,6 +52,7 @@ export const HistoryTab: React.FC = () => {
     const [downloadTotalPages, setDownloadTotalPages] = useState(1);
     const [downloadTotal, setDownloadTotal] = useState(0);
     const [selectedDownloads, setSelectedDownloads] = useState<Set<string>>(new Set());
+    const [selectedDownloadLog, setSelectedDownloadLog] = useState<DownloadHistoryItem | null>(null);
 
     const [loading, setLoading] = useState(false);
 
@@ -173,6 +176,21 @@ export const HistoryTab: React.FC = () => {
             setSelectedDownloads(new Set());
         } catch (e) {
             console.error('Failed to bulk delete downloads:', e);
+        }
+    };
+
+    const handleClearAllDownloads = async () => {
+        if (!window.confirm(`Are you sure you want to clear ALL download history?`)) return;
+
+        try {
+            await fetch('/api/history', { method: 'DELETE' });
+            setDownloads([]);
+            setDownloadTotal(0);
+            setDownloadPage(1);
+            setDownloadTotalPages(1);
+            setSelectedDownloads(new Set());
+        } catch (e) {
+            console.error('Failed to clear all download history:', e);
         }
     };
 
@@ -423,6 +441,13 @@ export const HistoryTab: React.FC = () => {
                                     </button>
                                 </>
                             )}
+                            <button
+                                onClick={handleClearAllDownloads}
+                                disabled={downloadTotal === 0}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-medium ${downloadTotal > 0 ? 'bg-error/20 text-error hover:bg-error/30' : 'bg-white/5 text-secondary opacity-50 cursor-not-allowed'}`}
+                            >
+                                Clear All
+                            </button>
                             <button onClick={fetchDownloadHistory} className="p-2 text-secondary hover:text-white">
                                 <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                             </button>
@@ -452,11 +477,12 @@ export const HistoryTab: React.FC = () => {
                                                     {selectedDownloads.has(item.id) ? <CheckSquare size={18} /> : <Square size={18} />}
                                                 </button>
                                             </td>
-                                            <td className="px-4 py-3 text-sm font-medium truncate max-w-xs" title={item.file_name}>
-                                                {item.file_name || 'Unknown'}
+                                            <td className="px-4 py-3 text-sm font-medium truncate max-w-xs cursor-pointer hover:text-primary transition-colors flex items-center gap-2" title={item.file_name || `Pack #${item.slot} from ${item.bot}`} onClick={() => setSelectedDownloadLog(item)}>
+                                                {item.file_name || (item.slot ? `Pack #${item.slot} from ${item.bot}` : 'Unknown')}
+                                                <Terminal size={14} className="text-secondary opacity-50" />
                                             </td>
                                             <td className="px-4 py-3 text-secondary text-sm">
-                                                {formatBytes(item.size || 0)}
+                                                {item.size ? formatBytes(item.size) : '-'}
                                             </td>
                                             <td className="px-4 py-3">
                                                 <span className={`px-2 py-1 rounded text-xs font-medium ${item.status === 'completed' ? 'bg-success/20 text-success' : 'bg-error/20 text-error'
@@ -518,6 +544,15 @@ export const HistoryTab: React.FC = () => {
                         </div>
                     )}
                 </div>
+            )}
+
+            {selectedDownloadLog && (
+                <TransferLogsModal
+                    transferId={selectedDownloadLog.id}
+                    fileName={selectedDownloadLog.file_name}
+                    bot={selectedDownloadLog.bot}
+                    onClose={() => setSelectedDownloadLog(null)}
+                />
             )}
         </div>
     );

@@ -13,7 +13,6 @@ futures = "0.3"
 axum = { version = "0.8.7", features = ["macros", "ws"] }
 
 # HTTP Client
-reqwest = { version = "0.12.25", features = ["json"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -48,6 +47,8 @@ tokio-socks = "0.5"
 
 # Plugins
 mlua = { version = "0.9", features = ["lua54", "vendored", "async", "send"] }
+regex = "1.12.4"
+reqwest = { version = "0.13.4", features = ["json"] }
 
 [dev-dependencies]
 tempfile = "3"

@@ -14,11 +14,7 @@ fn main() {
     // Skip npm build if:
     // 1. CROSS_COMPILE is set (cross-compilation environment)
     // 2. SKIP_WEB_BUILD is set
-    // 3. web/dist already exists (pre-built by CI)
-    if std::env::var("CROSS_COMPILE").is_ok()
-        || std::env::var("SKIP_WEB_BUILD").is_ok()
-        || std::path::Path::new("web/dist/index.html").exists()
-    {
+    if std::env::var("CROSS_COMPILE").is_ok() || std::env::var("SKIP_WEB_BUILD").is_ok() {
         println!("cargo:warning=Skipping web build (pre-built or cross-compile)");
         return;
     }

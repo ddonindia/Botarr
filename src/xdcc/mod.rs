@@ -136,6 +136,8 @@ pub struct XdccTransfer {
     pub error: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
+    #[serde(skip)]
+    pub logs: std::collections::VecDeque<String>,
 }
 
 impl XdccTransfer {
@@ -153,6 +155,7 @@ impl XdccTransfer {
             error: None,
             created_at: now,
             updated_at: now,
+            logs: std::collections::VecDeque::new(),
         }
     }
 }
@@ -164,6 +167,7 @@ pub enum XdccError {
     ConnectionFailed(String),
     ChannelJoinFailed(String),
     TransferFailed(String),
+    FatalIo(String),
     SearchFailed(String),
     InvalidPack(String),
     BotBusy(String),
@@ -177,6 +181,7 @@ impl XdccError {
         match self {
             XdccError::InvalidUrl(_) => true,
             XdccError::InvalidPack(_) => true,
+            XdccError::FatalIo(_) => true,
             XdccError::NickInUse(_) => false, // Can retry with new nick
             XdccError::BotBusy(_) => false,   // Can retry later
             XdccError::ConnectionFailed(_) => false,
@@ -198,6 +203,7 @@ impl fmt::Display for XdccError {
             XdccError::ConnectionFailed(msg) => write!(f, "Connection failed: {}", msg),
             XdccError::ChannelJoinFailed(msg) => write!(f, "Channel join failed: {}", msg),
             XdccError::TransferFailed(msg) => write!(f, "Transfer failed: {}", msg),
+            XdccError::FatalIo(msg) => write!(f, "Fatal IO error: {}", msg),
             XdccError::SearchFailed(msg) => write!(f, "Search failed: {}", msg),
             XdccError::Timeout(msg) => write!(f, "Timeout: {}", msg),
         }

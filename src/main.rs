@@ -106,7 +106,6 @@ async fn main() -> anyhow::Result<()> {
         irc_client_manager: irc_client_manager.clone(),
     };
 
-    // Handle plugin actions
     let monitor_clone = irc_monitor.clone();
     let tm_clone = state.transfer_manager.clone();
     tokio::spawn(async move {
@@ -115,7 +114,7 @@ async fn main() -> anyhow::Result<()> {
                 plugin::PluginAction::MonitorChannel(plugin_name, network, channel) => {
                     monitor_clone.start_monitoring(plugin_name, network, channel);
                 }
-                plugin::PluginAction::Download(url) => {
+                plugin::PluginAction::Download(url, filename) => {
                     let lock = tm_clone.read().await;
                     if let Ok(xdcc_url) = crate::xdcc::XdccUrl::parse(&url) {
                         let _ = lock
@@ -123,11 +122,12 @@ async fn main() -> anyhow::Result<()> {
                                 xdcc_url,
                                 crate::xdcc::transfer::TransferPriority::Normal,
                                 false,
+                                filename,
                             )
                             .await;
                     }
                 }
-                plugin::PluginAction::Queue(url) => {
+                plugin::PluginAction::Queue(url, filename) => {
                     let lock = tm_clone.read().await;
                     if let Ok(xdcc_url) = crate::xdcc::XdccUrl::parse(&url) {
                         let _ = lock
@@ -135,6 +135,7 @@ async fn main() -> anyhow::Result<()> {
                                 xdcc_url,
                                 crate::xdcc::transfer::TransferPriority::Normal,
                                 true,
+                                filename,
                             )
                             .await;
                     }
@@ -147,7 +148,56 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .merge(api::routes())
         .fallback(static_handler)
-        .with_state(state);
+        .with_state(state.clone()); // state must be cloned here because we need it below
+
+    // Start Queue Processor
+    let queue_state = state.clone();
+    tokio::spawn(async move {
+        tracing::info!("Queue processor started");
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+            let active_count = {
+                let tm = queue_state.transfer_manager.read().await;
+                let transfers = tm.list_transfers().await;
+                transfers
+                    .iter()
+                    .filter(|t| {
+                        let status = format!("{:?}", t.transfer.status).to_lowercase();
+                        matches!(
+                            status.as_str(),
+                            "connecting" | "joining" | "requesting" | "downloading"
+                        )
+                    })
+                    .count()
+            };
+
+            let limit = {
+                let cfg = queue_state.config.read().await;
+                cfg.queue_limit as usize
+            };
+
+            if active_count < limit {
+                let pop_result = {
+                    let tm = queue_state.transfer_manager.write().await;
+                    tm.pop_queue().await
+                };
+
+                if let Some((id, url, token)) = pop_result {
+                    tracing::info!("Popped transfer {} from queue, starting download...", id);
+                    api::spawn_download_task(
+                        id,
+                        url,
+                        token,
+                        queue_state.download_dir.clone(),
+                        queue_state.transfer_manager.clone(),
+                        queue_state.config.clone(),
+                        queue_state.plugin_manager.clone(),
+                    );
+                }
+            }
+        }
+    });
 
     // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], 3001)); // Default port 3001 for Botarr

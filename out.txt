@@ -1,0 +1,148 @@
+> NICK botarr_test_8888
+> USER botarr_user 0 * :RealNameHere
+< :Dark-Sky.SceneP2P.net NOTICE * :*** Looking up your hostname...
+< :Dark-Sky.SceneP2P.net NOTICE * :*** Couldn't resolve your hostname; using your IP address instead
+< PING :74D1FEBE
+> PONG :74D1FEBE
+< :Dark-Sky.SceneP2P.net 001 botarr_test_8888 :Welcome to the SceneP2P IRC Network botarr_test_8888!botarr_use@49.207.222.199
+< :Dark-Sky.SceneP2P.net 002 botarr_test_8888 :Your host is Dark-Sky.SceneP2P.net, running version UnrealIRCd-6.2.5
+< :Dark-Sky.SceneP2P.net 003 botarr_test_8888 :This server was created Sat May 16 2026 at 22:48:02 UTC
+< :Dark-Sky.SceneP2P.net 004 botarr_test_8888 Dark-Sky.SceneP2P.net UnrealIRCd-6.2.5 diopqrstwxzBDGHIRSTWZ beIacdfhiklmnopqrstvzCDFGHKLMNOPQRSTVZ
+< :Dark-Sky.SceneP2P.net 005 botarr_test_8888 ACCOUNTEXTBAN=account,a AWAYLEN=307 BOT=B CASEMAPPING=ascii CHANLIMIT=#:30 CHANMODES=beI,fkL,lFH,cdimnprstzCDGKMNOPQRSTVZ CHANNELLEN=32 CHANTYPES=# CHATHISTORY=50 CLIENTTAGDENY=*,-draft/typing,-typing,-draft/channel-context,-draft/reply DEAF=d ELIST=MNUCT :are supported by this server
+> :Dark-Sky.SceneP2P.net 005 botarr_test_8888 ACCOUNTEXTBAN=account,a AWAYLEN=307 BOT=B CASEMAPPONG=ascii CHANLIMIT=#:30 CHANMODES=beI,fkL,lFH,cdimnprstzCDGKMNOPQRSTVZ CHANNELLEN=32 CHANTYPES=# CHATHISTORY=50 CLIENTTAGDENY=*,-draft/typing,-typing,-draft/channel-context,-draft/reply DEAF=d ELIST=MNUCT :are supported by this server
+< :Dark-Sky.SceneP2P.net 005 botarr_test_8888 EXCEPTS EXTBAN=~,acfijmnpqrtACFGOST INVEX KICKLEN=307 KNOCK MAP MAXLIST=b:60,e:60,I:60 MAXNICKLEN=30 MINNICKLEN=0 MODES=12 MONITOR=128 MSGREFTYPES=msgid,timestamp :are supported by this server
+< :Dark-Sky.SceneP2P.net 005 botarr_test_8888 NAMELEN=50 NAMESX NETWORK=SceneP2P NICKLEN=30 PREFIX=(qaohv)~&@%+ QUITLEN=307 SAFELIST SILENCE=15 STATUSMSG=~&@%+ TARGMAX=DCCALLOW:,ISON:,JOIN:,KICK:4,KILL:,LIST:,NAMES:1,NOTICE:1,PART:,PRIVMSG:4,SAJOIN:,SAPART:,TAGMSG:1,USERHOST:,USERIP:,WATCH:,WHOIS:1,WHOWAS:1 TOPICLEN=360 UHNAMES :are supported by this server
+< :Dark-Sky.SceneP2P.net 005 botarr_test_8888 USERIP WALLCHOPS WATCH=128 WATCHOPTS=A WHOX :are supported by this server
+< :Dark-Sky.SceneP2P.net 396 botarr_test_8888 C8630D7B.949976E7.D91B0238.IP :is now your displayed host
+< :Dark-Sky.SceneP2P.net NOTICE botarr_test_8888 :*** You are connected to Dark-Sky.SceneP2P.net with TLSv1.3/X25519MLKEM768/TLS_CHACHA20_POLY1305_SHA256
+< :Dark-Sky.SceneP2P.net 251 botarr_test_8888 :There are 1 users and 914 invisible on 8 servers
+< :Dark-Sky.SceneP2P.net 252 botarr_test_8888 17 :operator(s) online
+< :Dark-Sky.SceneP2P.net 254 botarr_test_8888 76 :channels formed
+< :Dark-Sky.SceneP2P.net 255 botarr_test_8888 :I have 195 clients and 1 servers
+< :Dark-Sky.SceneP2P.net 265 botarr_test_8888 195 271 :Current local users 195, max 271
+< :Dark-Sky.SceneP2P.net 266 botarr_test_8888 915 2559 :Current global users 915, max 2559
+< :Dark-Sky.SceneP2P.net 375 botarr_test_8888 :- Dark-Sky.SceneP2P.net Message of the Day -
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- 16/5/2026 11:05
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- This is the short MOTD. To view the complete MOTD type /motd
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :-
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- Welcome to the SceneP2P IRC Network.
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :-
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- All users are expected to connect using SSL/TLS on port 6697 or 9999.
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :-
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- Users are strongly encouraged to register their nickname with NickServ:
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- /NickServ HELP REGISTER
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- To prevent nickname expiration,
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- you must identify to NickServ at least once every 60 days.
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :-
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- SceneP2P supports SASL authentication with mechanisms
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- EXTERNAL (TLS client certificates) and PLAIN.
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- SASL authentication occurs during connection,
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- before the user becomes visible on the network,
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- and automatically identifies you to NickServ.
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- Authenticated (trusted) users are exempt from connection throttling,
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- ident/auth/DNSBL checks, and certain other restrictions.
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :-
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- All users are expected to use SASL to authenticate with NickServ.
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :-
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- SceneP2P is powered by UnrealIRCd and supports modern IRCv3 features
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- (see https://ircv3.net/).
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- Older clients may experience errors or disconnects.
+< :Dark-Sky.SceneP2P.net 372 botarr_test_8888 :- Users are responsible for ensuring they are using a current, supported IRC client.
+< :Dark-Sky.SceneP2P.net 376 botarr_test_8888 :End of /MOTD command.
+> JOIN #THE.SOURCE
+> JOIN #THE.SOURCE.NOSPAM
+> PRIVMSG TS-HD|FR|PARANOIA :xdcc send #211
+< :botarr_test_8888 MODE botarr_test_8888 :+ixz
+< :NickServ!services@Services.SceneP2P.net NOTICE botarr_test_8888 :Your nickname is not registered. To register it, use: /msg NickServ REGISTER password email
+< :botarr_test_8888!botarr_use@C8630D7B.949976E7.D91B0238.IP JOIN :#THE.SOURCE
+< :Dark-Sky.SceneP2P.net 332 botarr_test_8888 #THE.SOURCE :10Welcome to #THE.SOURCE. 7The only xdcc channel you will ever need. The FASTEST downloads on IRC. NEVER throttled/logged/restricted | #The.Lounge for search/chat | 4#THE.INSIDERS for auto downloads. Open to all! |11Escape the flood join #THE.SOURCE.NOSPAM | 13Happy Leeching!!!
+< :Dark-Sky.SceneP2P.net 333 botarr_test_8888 #THE.SOURCE Reeko 1625664464
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :botarr_test_8888 botarr_4377_ paketservice ikonitas %TS-ARCHIVE|IT|P|86652 jawborne lopak19771 %TS-HDTV|PT|KNIGHT %TS-HDTV|CH|JAKE Guest8660 dafga nugakolabo Chato xamar Ikuria Drow mxa2bat %TS-HD|US|APPLE _4cr0ss tressur BloOD CobrSkA thirdeye gdfg boern1138 MojoJojo Levisfron Nathene RockingBorg Vitus111 PixelDrift X|Get_46 hufi__ tosh kwon %TS-ARCHIVE|TW|P|83777 Mil-cr %TS-HD|US|P|ANIMAL Whoareyou
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :Guest41658 MaPh scuolli Fab2017_ ad_nause1m nicko68 vanguard67 %TS-ARCHIVE|DE|P|60028 %TS-ARCHIVE|DE|P|22998 %TS-ARCHIVE|DE|P|65417 %TS-ARCHIVE|BE|I|P|54223 hagbard kronickiller DrAcOLa1 SirKingMauro_ ktona1 Guest13452 %TS-HD|FR|STAN powder %TS-HDTV|MY|BITCH peterx-c2 %TS-ARCHIVE|NL|P|10662 w4ft {DV8} Kilo666 mlkm Rikochan vitagio Guest30303 Fumoffuu flowerchild %TS-ARCHIVE|TH|P|26544 fix-tronics
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :%TS-NEWBITCH-013 margus ACKECKK saru hauke aOs Maier0816_ %TS-HDTV|IT|P|76283 homer81 mjolnir870 Wildclip lazlev JBFan Cadu Kyelenshep Guest38311 sylvie2027 dikanothethird obfuscat4 Vendrio \mSg smurf2 luckylittle gar oliwor Ra_ SAM dmj2 Ehanet fabsn182 exilium %TS-HDTV|US|MASS krem %TS-ARCHIVE|NL|P|02694 DJCorpse H31NO Cooperggg %TS-HD|IT|P|35802 &TheSource |Used| &cba skully89 %TS-HDTV|RO|P|11421
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :sishpete %TS-HDTV|HK|P|72506 %TS-HDTV|MK|STFU wildfire %TS-ARCHIVE|AU|P|90667 NickTheCrumble exnizz Rakdar %TS-HD|DK|P|69230 tzBwg hueboy101 shoe_monkey ChrizzlyBear Guest55159 WasteCase %TS-NEWBITCH-01 s3ss_ crazysaem |__|_ %TS-HDTV|SG|VPXZ baaaaadass|3 Xircuits JacobAllen451 luhiuh Guest12191 %TS-ARCHIVE|FR|P|98078 sporq__ QxickTF6|2 SaltyNutz peadea2 HoosierDaddy ArtoSweetheart collide Noodles
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :[n0mad] %TS-HDTV|DE|VPSD bluewing Guest13254 Cuban %TS-HDTV|GB|VPSA %TS-ARCHIVE|DE|P|88136 %TS-HDTV|SG|VPSW xd_66350 %TS-ARCHIVE|CR|P|96864 |DeMoN| %TS-ARCHIVE|FR|P|31900 Krylance dropaty Cirrus WindowsKey alexpn4 HellowKity KB in10s doubled xious Soa okotabir cricket Da-Luci %TS-HD|US|P|DATA %TS-HDTV|SG|VPSJ %TS-HDTV|FR|VPSG %TS-HDTV|DE|VPSH %TS-HD|KR|FREE %TS-HDTV|FR|P|55840 %TS-HDTV|US|VPSTT %TS-HDTV|SE|HIGH
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :%TS-ARCHIVE|GB|P|09871 %TS-HDTV|SG|VPSA %TS-HDTV|DE|VPSI %TS-HDTV|SG|VPSF Timbo %TS-NEWBITCH-012 |C0Y0TE| %TS-HDTV|GB|P|26572 mr_sandman %TS-APP|US|P|39503 %TS-HD|ES|P|51011 Guest5544 %TS-ARCHIVE|TW|P|62000 gusman21 julio2 heoyea %TS-ARCHIVE|US|P|11666 Hieppo %TS-HDTV|SE|RUN %TS-HDTV|IT|P|WEB %TS-HDTV|HK|P|24759 %TS-HDTV|RU|VLAD %TS-HDTV|US|VPSY rael %TS-ARCHIVE|DE|P|62777 Chromie1 little0831 goldf1ng3r555
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :%TS-ARCHIVE|TW|P|20185 %TS-HDTV|TR|P|77914 %TS-HDTV|CH|P|18992 L555BAT quiznoss22 %TS-ARCHIVE|RU|P|78544 %TS-HD|DK|WINDOWLICKER MrSmaul drabs pensionplan %TS-HDTV|CA|TRON prox %TS-HDTV|IT|HARVEY periotdots tschaep Hick %TS-ARCHIVE|IT|P|14776 %TS-HD|FR|MERCI %TS-HD|IT|P|35786 %TS-ARCHIVE|CA|P|30119 %TS-HDTV|US|P|44131 el1979 xXWiLdXx Guest36960 sundown speedyb SPEEDEEBE t3nk3n %TS-ARCHIVE|AR|P|45665
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :Chivey sheababy RandolphLundgreen Aiz7en terravore jclarks_ weaktasone %TS-HDTV|AU|HOWARD l1m3l1ght %TS-HD|PL|STFU HyDaRgOS %TS-ARCHIVE|JP|P|85417 nate2169 disturbed someklown13 %TS-HD|CH|P|MOLE %TS-ARCHIVE|RU|P|90259 SAMTZ awty Exsec Netwizaes Del_Soto %TS-ARCHIVE|US|P|32549 skinny0777 %TS-HDTV|US|WEAK _FuF_17 autofetch LandoverMike h3r3t1c0n3-AUTO caveat_emptor d0ct0r1234 ragevietnow thewizards2k7
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :hbjsls Guest10194 %TS-HD|TW|P|35611 %TS-HDTV|TW|P|22057 mxshi entjoe fedex %TS-HDTV|HU|WACK mauser Slydice Agent hygo_ Rastaman2 %TS-ARCHIVE|DE|P|33507 ertain Guest4989 %TS-HDTV|GR|P|66523 METTTAL %TS-HDTV|TW|P|61847 Jabroni hArDsTyLe %TS-ARCHIVE|KR|P|84042 soopajon %TS-HDTV|PL|P|70432 DizTortion KingDork %TS-HD|RU|P|85881 trader141414 %TS-ARCHIVE|FR|P|85796 %TS-HD|NL|DEMON %TS-ARCHIVE|IT|P|67223
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :Limas13 Guest63393 %TS-HD|IT|P|89908 %TS-HDTV|PL|P|ABUSED immolate AdAm0_ %TS-HDTV|HK|ROCKY jamesevansjr ASHTZ8 lock-jaw e3ck0 ex|mine elfbow %TS-APP|TW|REN %TS-ARCHIVE|HK|P|76637 irqzero Futuro &dbg2 %TS-ARCHIVE|KR|P|21358 jommommamma Grift Kairne %TS-ARCHIVE|ID|P|65445 %TS-HDTV|JP|P|96349 %TS-HD|GB|ZOOM outsignia douzeb GMix187 cr1ms0n Local Nav-22 Manmohan %TS-ARCHIVE|US|P|20531 Guest51281 blaze
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :metshcam jadenooo %TS-HD|RU|P|45145 rnewmantaz crackbaby %TS-HD|IE|PUB BMHicks wql4434 %TS-HDTV|IT|P|84658 %TS-ARCHIVE|NL|P|03215 Serpente %TS-HD|RU|CYBER pr1n afeeaw32 Evileman %TS-ARCHIVE|JP|P|66757 %TS-HDTV|RU|SPOOF ClimbOn quo Lurker %TS-ARCHIVE|US|P|03799 ellie sy3 %TS-ARCHIVE|PL|P|30229 %TS-HDTV|GB|P|18217 tomblao2ds3 Ws_TimMy Sir-Cece Splix Guest60439 mightymos Hennessey Mystery %TS-HDTV|SG|VPSFF
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :ryzenda dev jamesdeen jaxson %TS-ARCHIVE|DE|I|P|65132 Schwiveled kartak supdudettes dodat abgare1911 ovRLux %TS-ARCHIVE|HK|I|P|83904 Livingroom-Server %TS-NEWBITCH-014 %TS-NEWBITCH-010 your_nick %TS-HDTV|DE|VPSJ Guest16173 %TS-HD|FR|NEUTRINO %TS-ARCHIVE|DE|P|925000 %TS-HD|FR|PARANOIA %TS-HDTV|FR|NEUTRINO %TS-HD|NL|SNA %TS-HD|US|P|BLAZE howufiga %TS-HD|CH|P|RINGMASTER %TS-ARCHIVE|DE|P|90096 %TS-ARCHIVE|GB|P|84819
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :%TS-APP|CA|P|90411 %TS-HD|SG|GHOSTED %TS-ARCHIVE|US|P|22558 %TS-HDTV|SG|VPSN %TS-HD|KR|FLASH %TS-HDTV|FR|VPSN %TS-ARCHIVE|DE|P|84870 %TS-HDTV|SG|VPSQ %TS-HDTV|SG|VPSAA %TS-HDTV|DE|VPSK %TS-HDTV|SG|VPSU %TS-HDTV|US|VPSPP %TS-HDTV|US|VPSEE %TS-HDTV|US|VPSS %TS-APP|FR|P|58293 %TS-HDTV|SG|VPSM %TS-ARCHIVE|AU|P|59687 %TS-HDTV|SG|VPSR %TS-HDTV|FR|VPSE %TS-HDTV|US|VPSU %TS-HDTV|US|VPST %TS-HDTV|DE|VPSE %TS-HDTV|FR|VPSO
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :%TS-HDTV|NL|VPSA %TS-HDTV|FR|JUSTWATCH %TS-HD|FR|BALDER %TS-HDTV|CH|P|51142 %TS-ARCHIVE|CA|P|79852 %TS-HDTV|US|WTF %TS-HDTV|PL|VPSA %TS-HD|FR|WOOO worf %TS-ARCHIVE|DE|P|49582 %TS-ARCHIVE|DE|P|39671 %TS-HDTV|FR|VPSL %TS-HDTV|SG|VPSG %TS-HDTV|SG|YODA %TS-HDTV|NL|VPSB %TS-HDTV|FR|VPSD %TS-ARCHIVE|ES|P|23597 %TS-HDTV|HU|FWYTYK %TS-HDTV|FR|VPSQ %TS-ARCHIVE|DE|P|32920 %TS-HDTV|ES|BABY %TS-APP|JP|WHORE %TS-HDTV|CA|CLOUD
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :%TS-HDTV|NL|P|72658 %TS-HDTV|PL|P|Z limon SirFetchIt xdcc-info ciapsnev Wuzzel nudeneil hostile1982 Doug r3d rewt_gw2 cypher69 TrickyDicky torsius silverhiryuu oronon milk jt9e8 catfish kupferkabel1 Germ1nal soloejo27 Guest20655 xenagi coreagent saito hfpgsm maV poorboy Ramado Lockbain Spider_web fdfdf_ S3K Eesai2shai fad64 cuddlebug qwertykb &dbx rome_390 Guest14661 vaporsware Dragon12 jtgd artemis
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :JoeUser99 %TS-HDTV|NL|SNA %TS-HDTV|NL|P|FEDEX john3941 irockiso gxsilver %TS-HDTV|HK|P|79348 nema123 Waldi %TS-HDTV|FR|PARANOIA %TS-ARCHIVE|CR|P|968640 dasdasdasdas rewt Segway souldessin aruns %TS-HD|JP|BONES %TS-HD|FR|FLAME1 sx %TS-ARCHIVE|DE|P|969970 %TS-HDTV|FR|JEDI %TS-ARCHIVE|NL|P|56033 %TS-ARCHIVE|DE|P|96997 ~TS-Protect %TS-HDTV|US|VPSV %TS-HDTV|US|VPSR %TS-HDTV|IT|MARLIN %TS-HDTV|RO|P|75943
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :%TS-HDTV|SG|VPSK %TS-ARCHIVE|PL|P|88108 %TS-HDTV|KR|P|69186 %TS-ARCHIVE|JP|P|28181 %TS-HD|FR|FLAME %TS-APP|US|P|23456 %TS-ARCHIVE|HK|P|48152 %TS-HD|FR|STORE %TS-HDTV|SG|VPSL %TS-HDTV|SG|VPSEE %TS-HDTV|SG|VPSD %TS-HDTV|SG|VPSGG %TS-ARCHIVE|BE|P|03698 %TS-HDTV|GB|VPSC qc001 %TS-HDTV|DE|P|96595 %TS-HDTV|CA|P|60609 TRNG %TS-ARCHIVE|DE|P|92500 %TS-HDTV|CA|P|24996 %TS-ARCHIVE|NL|P|89053 %TS-HDTV|NL|P|FREEDOM
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :%TS-ARCHIVE|JP|P|63952 &Reeko %TS-HDTV|NL|VALHALL %TS-HDTV|FR|VPSAA %TS-HD|FR|ODIN %TS-HDTV|SG|VPSCC %TS-HD|FR|FLAME0 %TS-HDTV|FR|VPSF Guest23807 untisump xemo128198 PTDTC SonicD TarunSt EmeraldBot cookiemonster2026 %TS-APP|ID|P|49983 ohgma jkcm725 Guest53979 %TS-HDTV|ES|SPUR john453625223 %TS-HDTV|SG|VPSX goodmold %TS-HD|US|P|BEAST %TS-ARCHIVE|IT|P|20256 %TS-HDTV|GB|VIRGIN %TS-ARCHIVE|US|P|31618
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #THE.SOURCE :m1n10n MikeS %TS-HDTV|AT|HARTBERG %TS-HD|US|JUGGALO wasd Lordofillusio sadkjkal4213 %TS-HD|US|GREEN %TS-HDTV|IN|VPSA %TS-HDTV|US|VPSAA fallum12 %TS-ARCHIVE|TR|P|85039 %TS-HDTV|CA|VPSA %TS-ARCHIVE|LV|P|92691
+< :Dark-Sky.SceneP2P.net 366 botarr_test_8888 #THE.SOURCE :End of /NAMES list.
+< :botarr_test_8888!botarr_use@C8630D7B.949976E7.D91B0238.IP JOIN :#the.source.nospam
+< :Dark-Sky.SceneP2P.net 332 botarr_test_8888 #the.source.nospam :10Welcome to #THE.SOURCE.NOSPAM | 7Idle here to escape the flood in #THE.SOURCE. NEW announces only. If you are in this channel you do not need to be in #THE.SOURCE | 7Join #THE.LOUNGE for search and chat | 4Join #THE.INSIDERS for auto downloads. Open to all!! | 13Happy Leeching!!!
+< :Dark-Sky.SceneP2P.net 333 botarr_test_8888 #the.source.nospam Reeko 1625664421
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :botarr_test_8888 botarr_4377_ Skippy1 %TS-ARCHIVE|IT|P|86652 %TS-HDTV|PT|KNIGHT %TS-HDTV|CH|JAKE Foguete %TS-HD|US|APPLE FirePath|2 Nousemusic twinview69 bozman gdfg rickyb009 Nathene no_comment %TS-ARCHIVE|TW|P|83777 %TS-HD|US|P|ANIMAL Guest5113 holpyl nicko68 %TS-ARCHIVE|DE|P|60028 %TS-ARCHIVE|DE|P|22998 %TS-ARCHIVE|DE|P|65417 &supa AresS lederstrumpf %TS-HD|FR|STAN powder %TS-HDTV|MY|BITCH
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :klong _COS_r0cks_ Mancubus Chaos_Lord FuMaNcHu %TS-ARCHIVE|NL|P|10662 Piko seekfind sung17592 LAXFats2720 setsuna Suyuzo newbie %TS-ARCHIVE|TH|P|26544 %TS-NEWBITCH-013 yaisog cudencuden dickfor Guest4072 Maier0816_ %TS-HDTV|IT|P|76283 josiasforever FudgeIT uncreativenickname Kyelenshep dikanothethird luckylittle b0n0b0k1d %TS-HDTV|US|MASS krem auricoM^ %TS-ARCHIVE|NL|P|02694 %TS-HD|IT|P|35802
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :&TheSource div |Used| ~TS-Search %TS-HDTV|RO|P|11421 %TS-HDTV|HK|P|72506 %TS-HDTV|MK|STFU %TS-ARCHIVE|AU|P|90667 zachary338 dchavez Lac3rat3d %TS-HD|DK|P|69230 BloodyCumshot _old_scener %TS-NEWBITCH-01 balves|2 nibs Perfectjerk |__|_ %TS-HDTV|SG|VPXZ Johannson IAMANEVILNACHO haywoodyablowme %TS-ARCHIVE|FR|P|98078 Crimzon _ JimBouki peadea2 ArtoSweetheart DeathBringer man00ver sublmnl %TS-HDTV|DE|VPSD
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :bluewing mf %TS-HDTV|GB|VPSA %TS-ARCHIVE|DE|P|88136 %TS-HDTV|SG|VPSW bonus %TS-ARCHIVE|CR|P|96864 |DeMoN| %TS-ARCHIVE|FR|P|31900 seph34545 Cirrus Taskforce Guest39469 doubled cripes ^o^ %TS-HD|US|P|DATA %TS-HDTV|SG|VPSJ %TS-HDTV|FR|VPSG %TS-HDTV|DE|VPSH %TS-HD|KR|FREE %TS-HDTV|FR|P|55840 %TS-HDTV|US|VPSTT %TS-HDTV|SE|HIGH %TS-ARCHIVE|GB|P|09871 %TS-HDTV|SG|VPSA %TS-HDTV|DE|VPSI %TS-HDTV|SG|VPSF
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :%TS-NEWBITCH-012 TiTAN20 %TS-HDTV|GB|P|26572 %TS-APP|US|P|39503 %TS-HD|ES|P|51011 %TS-ARCHIVE|TW|P|62000 %TS-ARCHIVE|US|P|11666 surget wilma %TS-HDTV|SE|RUN %TS-HDTV|IT|P|WEB %TS-HDTV|HK|P|24759 %TS-HDTV|RU|VLAD %TS-HDTV|US|VPSY Groove Sun AndrewZen tinysam dnA bonofasitch %TS-ARCHIVE|DE|P|62777 oofake LUF %TS-ARCHIVE|TW|P|20185 %TS-HDTV|TR|P|77914 Enlighten %TS-HDTV|CH|P|18992 %TS-ARCHIVE|RU|P|78544
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :%TS-HD|DK|WINDOWLICKER Hammer MrSmaul timeless %TS-HDTV|CA|TRON %TS-HDTV|IT|HARVEY tsukasadt dNk Legend83 %TS-ARCHIVE|IT|P|14776 spa %TS-HD|FR|MERCI %TS-HD|IT|P|35786 %TS-ARCHIVE|CA|P|30119 %TS-HDTV|US|P|44131 jeh0va sundown ze32434 kvieta_ FLAShH ProfessorMoriarty WammoJammo Jumboburg %TS-ARCHIVE|AR|P|45665 zotbot %TS-HDTV|AU|HOWARD w00t %TS-HD|PL|STFU HyDaRgOS %TS-ARCHIVE|JP|P|85417 nate2169
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :%TS-HD|CH|P|MOLE %TS-ARCHIVE|RU|P|90259 taxi__ hoco ExpiredKebab ziomerek etjm2016 %TS-ARCHIVE|US|P|32549 %TS-HDTV|US|WEAK spudly Macbeth thewizards2k7 tectec %TS-HD|TW|P|35611 %TS-HDTV|TW|P|22057 somefookinguy reddragon022 %TS-HDTV|HU|WACK kanguy mymusic Dre5945 JJTagy SyLv uniT Guest41084 tackpack %TS-ARCHIVE|DE|P|33507 TheVac %TS-HDTV|GR|P|66523 %TS-HDTV|TW|P|61847 %TS-ARCHIVE|KR|P|84042
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :corax sb2010 %TS-HDTV|PL|P|70432 j3sus freddogg temponome %TS-HD|RU|P|85881 sadi %TS-ARCHIVE|FR|P|85796 %TS-HD|NL|DEMON bengalih %TS-ARCHIVE|IT|P|67223 pepsi %TS-HD|IT|P|89908 bokkopo %TS-HDTV|PL|P|ABUSED %TS-HDTV|HK|ROCKY Kiyoni AckvsNul dssboss %TS-APP|TW|REN %TS-ARCHIVE|HK|P|76637 irqzero &dbg2 %TS-ARCHIVE|KR|P|21358 %TS-ARCHIVE|ID|P|65445 %TS-HDTV|JP|P|96349 %TS-HD|GB|ZOOM mobius kam1kaze
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :Dunsockar %TS-ARCHIVE|US|P|20531 jadenooo %TS-HD|RU|P|45145 rnewmantaz %TS-HD|IE|PUB wql4434 nvr %TS-HDTV|IT|P|84658 %TS-ARCHIVE|NL|P|03215 %TS-HD|RU|CYBER bdao %TS-ARCHIVE|JP|P|66757 %TS-HDTV|RU|SPOOF ClimbOn %TS-ARCHIVE|US|P|03799 Solaris anon57984 %TS-ARCHIVE|PL|P|30229 %TS-HDTV|GB|P|18217 Ace Jan\ Sir-Cece DunkinCoder az3rty hamster df1 zener smrmrs nezerac %TS-HDTV|SG|VPSFF Final_FantasyVIII
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :ryzenda breadwinner jamesdeen HHauk Unknownuser NeChRiST Guest31414 ovRLux Guest51990 CHRiZON %TS-NEWBITCH-014 %TS-NEWBITCH-010 mil c[_] %TS-HDTV|DE|VPSJ CompoundNila %TS-HD|FR|NEUTRINO %TS-ARCHIVE|DE|P|925000 %TS-HD|FR|PARANOIA %TS-HDTV|FR|NEUTRINO %TS-HD|NL|SNA %TS-HD|US|P|BLAZE justme %TS-HD|CH|P|RINGMASTER %TS-ARCHIVE|DE|P|90096 %TS-ARCHIVE|GB|P|84819 %TS-APP|CA|P|90411 %TS-HD|SG|GHOSTED
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :%TS-ARCHIVE|US|P|22558 %TS-HDTV|SG|VPSN %TS-HD|KR|FLASH %TS-HDTV|FR|VPSN %TS-ARCHIVE|DE|P|84870 %TS-HDTV|SG|VPSQ %TS-HDTV|SG|VPSAA %TS-HDTV|DE|VPSK %TS-HDTV|SG|VPSU %TS-HDTV|US|VPSPP %TS-HDTV|US|VPSEE %TS-HDTV|US|VPSS %TS-APP|FR|P|58293 %TS-HDTV|SG|VPSM %TS-ARCHIVE|AU|P|59687 %TS-HDTV|FR|VPSE %TS-HDTV|SG|VPSR %TS-HDTV|US|VPSU %TS-HDTV|US|VPST %TS-HDTV|DE|VPSE %TS-HDTV|FR|VPSO %TS-HDTV|NL|VPSA
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :%TS-HDTV|FR|JUSTWATCH %TS-HD|FR|BALDER %TS-HDTV|CH|P|51142 %TS-ARCHIVE|CA|P|79852 %TS-HDTV|US|WTF %TS-HDTV|PL|VPSA %TS-HD|FR|WOOO %TS-ARCHIVE|DE|P|49582 %TS-ARCHIVE|DE|P|39671 %TS-HDTV|FR|VPSL %TS-HDTV|SG|VPSG %TS-HDTV|SG|YODA %TS-HDTV|FR|VPSD %TS-HDTV|NL|VPSB %TS-ARCHIVE|ES|P|23597 %TS-HDTV|HU|FWYTYK %TS-HDTV|FR|VPSQ %TS-ARCHIVE|DE|P|32920 %TS-HDTV|ES|BABY %TS-APP|JP|WHORE %TS-HDTV|CA|CLOUD
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :%TS-HDTV|NL|P|72658 %TS-HDTV|PL|P|Z huffduff tromas nudeneil mrgreen23 nemehlo cSend booyah torsius brap milk useretail_ devsta5 [empty] warl0ck g-zus Brocker arsehole234 poorboy Sir13 Ramado nuguy1 Spoui genataote Guest14505 TECH-T &dbx Jackson Dragon12 %TS-HDTV|NL|SNA temp0r %TS-HDTV|NL|P|FEDEX salad irockiso nahs4n %TS-HDTV|HK|P|79348 Waldi winkle %TS-HDTV|FR|PARANOIA %TS-ARCHIVE|CR|P|968640
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :%TS-HD|JP|BONES props2 Carlo %TS-HD|FR|FLAME1 %TS-ARCHIVE|DE|P|969970 %TS-HDTV|FR|JEDI %TS-ARCHIVE|NL|P|56033 %TS-ARCHIVE|DE|P|96997 %TS-HDTV|US|VPSV %TS-HDTV|US|VPSR %TS-HDTV|IT|MARLIN %TS-HDTV|RO|P|75943 %TS-HDTV|SG|VPSK %TS-ARCHIVE|PL|P|88108 %TS-HDTV|KR|P|69186 %TS-ARCHIVE|JP|P|28181 %TS-HD|FR|FLAME %TS-APP|US|P|23456 %TS-ARCHIVE|HK|P|48152 %TS-HD|FR|STORE %TS-HDTV|SG|VPSL %TS-HDTV|SG|VPSEE
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :%TS-HDTV|SG|VPSD %TS-HDTV|SG|VPSGG %TS-ARCHIVE|BE|P|03698 %TS-HDTV|GB|VPSC %TS-HDTV|DE|P|96595 %TS-HDTV|CA|P|60609 %TS-ARCHIVE|DE|P|92500 %TS-HDTV|CA|P|24996 %TS-ARCHIVE|NL|P|89053 %TS-HDTV|NL|P|FREEDOM %TS-ARCHIVE|JP|P|63952 &Reeko %TS-HDTV|NL|VALHALL MiJP %TS-HDTV|FR|VPSAA %TS-HD|FR|ODIN Human_Hunter %TS-HDTV|SG|VPSCC %TS-HD|FR|FLAME0 %TS-HDTV|FR|VPSF Kizer dbx` dot Guest23807 untisump xemo128198
+< :Dark-Sky.SceneP2P.net 353 botarr_test_8888 @ #the.source.nospam :jackD Guest6212 st0ner GoC Coobies %TS-APP|ID|P|49983 omicron mynotyou Rasel canceass2 %TS-HDTV|ES|SPUR %TS-HDTV|SG|VPSX %TS-HD|US|P|BEAST %TS-ARCHIVE|IT|P|20256 %TS-HDTV|GB|VIRGIN %TS-ARCHIVE|US|P|31618 dweelie %TS-HDTV|AT|HARTBERG REDman2k1 leebros %TS-HD|US|JUGGALO sadkjkal4213 %TS-HD|US|GREEN %TS-HDTV|IN|VPSA %TS-HDTV|US|VPSAA %TS-ARCHIVE|TR|P|85039 landyacht %TS-HDTV|CA|VPSA %TS-ARCHIVE|LV|P|92691
+< :Dark-Sky.SceneP2P.net 366 botarr_test_8888 #the.source.nospam :End of /NAMES list.
+< :TheSource!root@The.Source.For.All NOTICE botarr_test_8888 :[#THE.SOURCE] 10Welcome to #THE.SOURCE | 11Not sure what to do next? Join #THE.LOUNGE for !help !search !latest !passive | 7Join #THE.INSIDERS to setup your TV subscriptions for auto downloads. | Escape the flood. Idle in #THE.SOURCE.NOSPAM instead of #THE.SOURCE to download.
+< :Crimzon!Crimzon@EC4AD851.2F69BBF0.9B29B640.IP QUIT :Read error
+< :TS-HDTV|FR|P|55840!root@The.Source.org PRIVMSG #THE.SOURCE :#1775   2x [404M] 15Million.Dollar.Listing.Los.Angeles.S14E11.720p.HEVC.x265-MeGusta.mkv
+< :TS-ARCHIVE|AU|P|90667!root@The.Source.org PRIVMSG #the.source.nospam :#2661    0x [672M] 10The.Secret.of.Skinwalker.Ranch.Behind.the.Gates.S03E04.1080p.WEB.h264-EDITH.mkv
+< :TS-ARCHIVE|AU|P|90667!root@The.Source.org PRIVMSG #THE.SOURCE :#2661    0x [672M] 10The.Secret.of.Skinwalker.Ranch.Behind.the.Gates.S03E04.1080p.WEB.h264-EDITH.mkv
+< :TS-ARCHIVE|KR|P|84042!root@The.Source.org PRIVMSG #THE.SOURCE :#2111 0x [1.3G] 05RuPauls.Drag.Race.All.Stars.S11E07.ATHLETIC.SUPPORTER.DESIGN.CHALLENGE.1080p.HEVC.x265-MeGusta.mkv
+< :TS-HDTV|MK|STFU!root@The.Source.org PRIVMSG #THE.SOURCE :#404  2x [360M] 11Margos.Got.Money.Troubles.S01E01.720p.HEVC.x265-MeGusta.mkv
+< :TS-ARCHIVE|DE|P|925000!root@The.Source.org PRIVMSG #THE.SOURCE :#1240 0x [366M] 1590.Day.The.Last.Resort.S03E03.1080p.HEVC.x265-MeGusta.mkv
+< :TS-HDTV|HK|ROCKY!root@The.Source.org PRIVMSG #THE.SOURCE :#651   3x [261M] 10My.Adventures.with.Superman.S01E08.Zero.Day.Part.One.1080p.HEVC.x265-MeGusta.mkv
+< :TS-HDTV|FR|JUSTWATCH!root@The.Source.org PRIVMSG #THE.SOURCE :#483  0x [1.7G] 14Secrets.Declassified.with.David.Duchovny.S02E11.1080p.WEB.h264-EDITH.mkv
+< :TS-HD|FR|NEUTRINO!root@The.Source.org PRIVMSG #THE.SOURCE :#35   3x [3.6G] 10Woodwalkers.2.2026.GERMAN.720p.WEB.H264-MGE.mkv
+< :TS-ARCHIVE|DE|P|33507!root@The.Source.org PRIVMSG #THE.SOURCE :#1191 1x [11G] 14AEW.Dynamite.346.and.Collision.145.2026.05.20.MyAEW.1080p.WEB.h264-SpaZe.mp4
+< :TS-HDTV|HK|P|24759!root@The.Source.org PRIVMSG #THE.SOURCE :#3778 0x [2.2G] 11Dragons.Den.S23E07.720p.iP.WEB-DL.AAC2.0.H.264-RAWR.mkv
+< :TS-ARCHIVE|US|P|20531!root@The.Source.org PRIVMSG #THE.SOURCE :#240    1x [728M] 12House.of.Lies.S03E02.720p.WEB.h264-FaiLED.mkv
+< :TS-ARCHIVE|CR|P|968640!root@The.Source.org PRIVMSG #THE.SOURCE :#307 0x [276M] 03Arrested.Development.S01E16.Altar.Egos.1080p.HEVC.x265-MeGusta.mkv
+< :TS-ARCHIVE|CR|P|96864!root@The.Source.org PRIVMSG #THE.SOURCE :#327 0x [1.9G] 03Love.Island.S13E10.1080p.HDTV.H264-DARKFLiX.mkv
+< :TS-ARCHIVE|AU|P|90667!root@The.Source.org PRIVMSG #THE.SOURCE :#11   0x [3.3G] 10The.Thing.with.Feathers.2025.1080p.WEBRip.x265-DH.mkv
+< :TS-ARCHIVE|DE|P|969970!root@The.Source.org PRIVMSG #THE.SOURCE :#647  0x [481M] 03Curb.Your.Enthusiasm.S09E05.Thank.You.for.Your.Service.1080p.HEVC.x265-MeGusta.mkv
+< :TS-HDTV|GB|P|18217!root@The.Source.org PRIVMSG #THE.SOURCE :#1438 1x [2.4G] 11One.Friday.Fights.155.720p.WEB-DL.H264.Fight-BB.mp4
+< :TS-ARCHIVE|DE|P|96997!root@The.Source.org PRIVMSG #THE.SOURCE :#137  0x [351M] 03Thank.You.Next.S03E01.720p.HEVC.x265-MeGusta.mkv
+< :TS-HDTV|CH|P|51142!root@The.Source.org PRIVMSG #THE.SOURCE :#3237 1x [10G] 02WWE.Friday.Night.SmackDown.2026.06.12.1080p.WEBRip.H264-Star.mp4
+< :TS-HD|NL|SNA!root@The.Source.org PRIVMSG #THE.SOURCE :#991   2x [261M] 13Pluralsight.Integrations.for.DCACI.300-620.2026.BOOKWARE-GETH.tar
+< :TS-ARCHIVE|ID|P|65445!root@The.Source.org PRIVMSG #THE.SOURCE :#211 0x [344M] 14Law.and.Order.Special.Victims.Unit.S10E18.Baggage.720p.HEVC.x265-MeGusta.mkv
+< :TS-HD|CH|P|RINGMASTER!root@The.Source.org PRIVMSG #THE.SOURCE :#2742 1x [45M] 15As.Long.As.Youre.Here.Update.v1.0.2-TENOKE.tar
+< :TS-HDTV|NL|SNA!root@The.Source.org PRIVMSG #THE.SOURCE :#408  2x [571M] 11World.War.II.with.Tom.Hanks.S01E08.720p.HEVC.x265-MeGusta.mkv
+< :TS-ARCHIVE|DE|P|32920!root@The.Source.org PRIVMSG #THE.SOURCE :#671  1x [6.5G] 05Uncharted.2022.REPACK.1080p.BluRay.x265-YAWNTiC.mkv
+< :TS-HDTV|US|P|44131!root@The.Source.org PRIVMSG #THE.SOURCE :#111 1x [2.1G] 03Mock.The.Week.S23E01.1080p.HDTV.H264-DARKFLiX.mkv
+< :TS-APP|TW|REN!root@The.Source.org PRIVMSG #THE.SOURCE :#2121    2x [479M] 15Love.Island.S07E05.720p.HEVC.x265-MeGusta.mkv
+< :TS-HDTV|DE|P|96595!root@The.Source.org PRIVMSG #THE.SOURCE :#31  2x [452M] 14Sons.of.Anarchy.S03E11.Bainne.1080p.HEVC.x265-MeGusta.mkv
+< :TS-ARCHIVE|KR|P|21358!root@The.Source.org PRIVMSG #THE.SOURCE :#678  0x [978M] 02Bricsys.BricsCAD.Ultimate.v26.1.08-1.PORTUGUESE.x64-BTCR.tar
+< :Dark-Sky.SceneP2P.net 531 botarr_test_8888 TS-HD|FR|PARANOIA :You must identify to a registered nick to private message this user
+< :TS-HDTV|GB|VIRGIN!root@The.Source.org PRIVMSG #THE.SOURCE :#320  1x [3.5G] 02BKFC.Fight.Night.Nashville.Soto.vs.DeLeon.720p.DAZN.WEB.DL.AAC2.0.H.264-nVa.mkv
+< :TS-HDTV|FR|P|55840!root@The.Source.org PRIVMSG #THE.SOURCE :#1776   2x [259M] 15Jimmy.Kimmel.2023.02.23.Anthony.Mackie.720p.HEVC.x265-MeGusta.mkv
+< :TS-HDTV|MK|STFU!root@The.Source.org PRIVMSG #THE.SOURCE :#405  0x [349M] 11The.Law.According.to.Lidia.Poet.S03E05.720p.HEVC.x265-MeGusta.mkv
+Traceback (most recent call last):
+  File "/home/pi/src/Botarr/test_irc4.py", line 54, in <module>
+    wait_for("DCC SEND", 20)
+    ~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/home/pi/src/Botarr/test_irc4.py", line 43, in wait_for
+    line = read_until(timeout=timeout)
+  File "/home/pi/src/Botarr/test_irc4.py", line 25, in read_until
+    data = ssock.recv(1)
+  File "/usr/lib/python3.13/ssl.py", line 1285, in recv
+    return self.read(buflen)
+           ~~~~~~~~~^^^^^^^^
+  File "/usr/lib/python3.13/ssl.py", line 1140, in read
+    return self._sslobj.read(len)
+           ~~~~~~~~~~~~~~~~~^^^^^
+KeyboardInterrupt

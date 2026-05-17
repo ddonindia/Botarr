@@ -1,7 +1,7 @@
 import React from 'react';
 import { Settings } from 'lucide-react';
 
-export type TabType = 'search' | 'activities' | 'history' | 'plugins' | 'client' | 'settings';
+export type TabType = 'search' | 'activities' | 'history' | 'plugins' | 'autodl' | 'client' | 'settings';
 
 interface TabsProps {
     activeTab: TabType;
@@ -56,6 +56,18 @@ export const Tabs: React.FC<TabsProps> = ({ activeTab, onTabChange }) => {
             >
                 Plugins
                 {activeTab === 'plugins' && (
+                    <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary shadow-[0_0_10px_rgba(var(--primary-rgb),0.5)]" />
+                )}
+            </button>
+            <button
+                onClick={() => onTabChange('autodl')}
+                className={`px-8 py-3 text-sm font-medium transition-all relative ${activeTab === 'autodl'
+                    ? 'text-white'
+                    : 'text-secondary hover:text-white'
+                    }`}
+            >
+                Autodl
+                {activeTab === 'autodl' && (
                     <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary shadow-[0_0_10px_rgba(var(--primary-rgb),0.5)]" />
                 )}
             </button>

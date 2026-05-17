@@ -34,6 +34,7 @@ pub enum XdccEvent {
     IrcMessage(String, String, String, String), // network, channel, nick, message
     IrcNotice(String, String),                  // nick, message
     Error(XdccError),
+    Log(String),
 }
 
 /// Configuration for XDCC client
@@ -166,6 +167,12 @@ impl XdccClient {
         let server = format!("{}:{}", host, port);
 
         tracing::info!("Connecting to IRC server: {} (SSL: {})", server, use_ssl);
+        let _ = tx
+            .send(XdccEvent::Log(format!(
+                "Connecting to IRC server {}",
+                server
+            )))
+            .await;
 
         // Connect with timeout (use shorter connect timeout for fast failure)
         let connect_future = async {
@@ -197,6 +204,7 @@ impl XdccClient {
         .map_err(|e| XdccError::ConnectionFailed(format!("Connection failed: {}", e)))?;
 
         tracing::info!("TCP connected to {}", server);
+        let _ = tx.send(XdccEvent::Log("TCP connected".to_string())).await;
 
         // Perform TLS handshake if SSL is enabled
         if use_ssl {
@@ -321,6 +329,7 @@ impl XdccClient {
         let mut pending_resume: Option<DccResumeInfo> = None;
         let mut buf = Vec::with_capacity(1024);
         let mut joined_at: Option<std::time::Instant> = None;
+        let mut requested_at: Option<std::time::Instant> = None;
 
         loop {
             // Check if we should request NOW (before reading)
@@ -328,15 +337,33 @@ impl XdccClient {
                 if let Some(t) = joined_at {
                     if t.elapsed().as_secs() >= join_delay_secs {
                         requested = true;
+                        requested_at = Some(std::time::Instant::now());
                         tracing::info!("Requesting pack #{} from {}", url.slot, url.bot);
                         let _ = tx
                             .send(XdccEvent::Requesting(url.bot.clone(), url.slot))
+                            .await;
+                        let _ = tx
+                            .send(XdccEvent::Log(format!(
+                                "Requesting pack #{} from bot {}",
+                                url.slot, url.bot
+                            )))
                             .await;
                         Self::send_raw(
                             &mut writer,
                             &format!("PRIVMSG {} :xdcc send #{}", url.bot, url.slot),
                         )
                         .await?;
+                    }
+                }
+            }
+
+            // Explicitly check for overall timeout after requesting (ignore PING resets)
+            if requested {
+                if let Some(t) = requested_at {
+                    if t.elapsed().as_secs() >= config.timeout_secs {
+                        return Err(XdccError::Timeout(
+                            "Timed out waiting for DCC response from bot".into(),
+                        ));
                     }
                 }
             }
@@ -349,6 +376,16 @@ impl XdccClient {
                     let elapsed = t.elapsed().as_secs();
                     if elapsed < join_delay_secs {
                         current_timeout = Duration::from_secs(join_delay_secs - elapsed);
+                    } else {
+                        current_timeout = Duration::from_millis(10);
+                    }
+                }
+            } else if requested {
+                // If requested, only wait the REMAINING time
+                if let Some(t) = requested_at {
+                    let elapsed = t.elapsed().as_secs();
+                    if elapsed < config.timeout_secs {
+                        current_timeout = Duration::from_secs(config.timeout_secs - elapsed);
                     } else {
                         current_timeout = Duration::from_millis(10);
                     }
@@ -409,6 +446,9 @@ impl XdccClient {
 
                         tracing::info!("Received welcome, joining target channel {}", url.channel);
                         let _ = tx.send(XdccEvent::Joining(url.channel.clone())).await;
+                        let _ = tx
+                            .send(XdccEvent::Log(format!("Joining channel {}", url.channel)))
+                            .await;
                         Self::send_raw(&mut writer, &format!("JOIN {}", url.channel)).await?;
                     }
 
@@ -420,6 +460,12 @@ impl XdccClient {
                         joined_at = Some(std::time::Instant::now());
                         tracing::info!("Joined channel {}", url.channel);
                         let _ = tx.send(XdccEvent::Joined(url.channel.clone())).await;
+                        let _ = tx
+                            .send(XdccEvent::Log(format!(
+                                "Successfully joined {}",
+                                url.channel
+                            )))
+                            .await;
 
                         // Wait if join delay is configured
                         if join_delay_secs > 0 {
@@ -495,6 +541,12 @@ impl XdccClient {
                                     port: dcc_info.port,
                                     size: dcc_info.size,
                                 })
+                                .await;
+                            let _ = tx
+                                .send(XdccEvent::Log(format!(
+                                    "Received DCC SEND for {} ({} bytes)",
+                                    dcc_info.filename, dcc_info.size
+                                )))
                                 .await;
 
                             // Start DCC transfer (new file)
@@ -575,7 +627,17 @@ impl XdccClient {
                                     ))
                                     .await;
                             } else if cmd == "NOTICE" {
-                                let _ = tx.send(XdccEvent::IrcNotice(nick, msg)).await;
+                                let _ = tx
+                                    .send(XdccEvent::IrcNotice(nick.clone(), msg.clone()))
+                                    .await;
+                                if nick == url.bot {
+                                    let _ = tx
+                                        .send(XdccEvent::Log(format!(
+                                            "Notice from {}: {}",
+                                            nick, msg
+                                        )))
+                                        .await;
+                                }
                             }
                         }
                     }
@@ -764,7 +826,15 @@ impl XdccClient {
             .truncate(seek_offset == 0) // Only truncate if starting fresh
             .open(&file_path)
             .await
-            .map_err(|e| XdccError::TransferFailed(format!("Failed to create/open file: {}", e)))?;
+            .map_err(|e| match e.kind() {
+                std::io::ErrorKind::PermissionDenied
+                | std::io::ErrorKind::NotFound
+                | std::io::ErrorKind::StorageFull
+                | std::io::ErrorKind::WriteZero => {
+                    XdccError::FatalIo(format!("Failed to create/open file: {}", e))
+                }
+                _ => XdccError::TransferFailed(format!("Failed to create/open file: {}", e)),
+            })?;
 
         if seek_offset > 0 {
             tracing::info!("Resuming file at offset {}", seek_offset);
@@ -791,7 +861,14 @@ impl XdccClient {
                 Ok(n) => {
                     file.write_all(&buf[..n])
                         .await
-                        .map_err(|e| XdccError::TransferFailed(format!("Write error: {}", e)))?;
+                        .map_err(|e| match e.kind() {
+                            std::io::ErrorKind::StorageFull
+                            | std::io::ErrorKind::WriteZero
+                            | std::io::ErrorKind::PermissionDenied => {
+                                XdccError::FatalIo(format!("Write error: {}", e))
+                            }
+                            _ => XdccError::TransferFailed(format!("Write error: {}", e)),
+                        })?;
                     downloaded += n as u64;
                     bytes_since_update += n as u64;
 

@@ -24,9 +24,10 @@ pub fn routes() -> Router<AppState> {
         )
         .route("/api/transfers/{id}/retry", post(xdcc_retry_transfer))
         .route("/api/transfers/{id}/priority", post(xdcc_set_priority))
+        .route("/api/transfers/{id}/logs", get(xdcc_get_transfer_logs))
         .route("/api/bots/stats", get(xdcc_bot_stats))
         .route("/api/analytics", get(xdcc_analytics))
-        .route("/api/history", get(xdcc_history))
+        .route("/api/history", get(xdcc_history).delete(xdcc_clear_history))
         .route(
             "/api/history/{id}",
             axum::routing::delete(xdcc_delete_history),
@@ -46,6 +47,10 @@ pub fn routes() -> Router<AppState> {
         )
         .route("/api/queue", get(xdcc_queue_status))
         .route("/api/plugins/status", get(get_plugin_status))
+        .route(
+            "/api/plugins/autodl/filters",
+            get(get_autodl_filters).put(update_autodl_filters),
+        )
         .route("/api/irc/ws", get(irc_ws_handler))
         // Settings API
         .route("/api/settings", get(get_settings).put(update_settings))
@@ -87,6 +92,8 @@ pub struct DownloadRequest {
     pub url: String,
     #[serde(default)]
     pub priority: Option<String>, // "low", "normal", "high", "urgent"
+    #[serde(default)]
+    pub filename: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -210,6 +217,7 @@ pub fn spawn_download_task(
                                 Some(XdccEvent::DccSend { filename, size, ip, port }) => {
                                     tracing::info!("DCC SEND from {}:{} - {} ({} bytes)", ip, port, filename, size);
                                     let tm = transfer_manager.write().await;
+                                    tm.add_log(&tid, format!("DCC SEND from {}:{} - {} ({} bytes)", ip, port, filename, size)).await;
                                     tm.set_file_info(&tid, filename.clone(), size).await;
                                     tm.update_status(&tid, TransferStatus::Downloading).await;
                                     plugin_manager.emit_signal("download_started", crate::plugin::EventData::String(filename));
@@ -225,6 +233,10 @@ pub fn spawn_download_task(
                                 }
                                 Some(XdccEvent::Completed) => {
                                     tracing::info!("Download completed for {}", tid);
+                                    {
+                                        let tm = transfer_manager.write().await;
+                                        tm.add_log(&tid, "Download completed successfully".to_string()).await;
+                                    }
 
                                     // Get filename before completing
                                     let completed_filename = {
@@ -294,6 +306,7 @@ pub fn spawn_download_task(
                                     tracing::error!("Download error for {}: {}", tid, e);
                                     plugin_manager.emit_signal("download_failed", crate::plugin::EventData::String(format!("{}", e)));
                                     let tm = transfer_manager.write().await;
+                                    tm.add_log(&tid, format!("Error: {}", e)).await;
                                     retry_info = tm.set_failed(&tid, e.to_string(), e.is_fatal()).await;
                                     break;
                                 }
@@ -302,6 +315,10 @@ pub fn spawn_download_task(
                                 }
                                 Some(XdccEvent::IrcNotice(nick, message)) => {
                                     plugin_manager.emit_signal("irc_notice", crate::plugin::EventData::Tuple2(nick, message));
+                                }
+                                Some(XdccEvent::Log(msg)) => {
+                                    let tm = transfer_manager.write().await;
+                                    tm.add_log(&tid, msg).await;
                                 }
                                 None => break, // Channel closed
                                 _ => {}
@@ -428,12 +445,18 @@ pub async fn xdcc_download(
     };
 
     // Create transfer tracking with cancellation token
-    let (transfer_id, cancel_token) = {
+    let result = {
         let tm = state.transfer_manager.write().await;
-        tm.create_transfer(url.clone(), priority, false).await
+        tm.create_transfer(url.clone(), priority, false, req.filename.clone())
+            .await
     };
 
-    // Clone what we need for the background task
+    let (transfer_id, cancel_token) = match result {
+        Ok(res) => res,
+        Err(e) => {
+            return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response();
+        }
+    };
     let download_dir = state.download_dir.clone();
     let transfer_manager = state.transfer_manager.clone();
     let config = state.config.clone();
@@ -525,6 +548,17 @@ pub async fn xdcc_retry_transfer(
         )
             .into_response()
     }
+}
+
+/// Get transfer logs
+/// GET /api/transfers/:id/logs
+pub async fn xdcc_get_transfer_logs(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let tm = state.transfer_manager.read().await;
+    let logs = tm.get_logs(&id).await;
+    Json(serde_json::json!({ "logs": logs })).into_response()
 }
 
 /// Set transfer priority
@@ -648,20 +682,11 @@ pub async fn xdcc_delete_history(
 
     let tm = state.transfer_manager.write().await;
 
-    // Log current history state for debugging
-    let history_count = tm.get_history(100).await.len();
-    tracing::info!("Current history count: {}", history_count);
-
     if tm.delete_history_item(&id, params.delete_file).await {
-        // Also delete from database
-        let _ = state.database.delete_download(&id);
+        // tm.delete_history_item now also deletes from database!
         Json(serde_json::json!({"status": "deleted"})).into_response()
     } else {
-        tracing::warn!(
-            "History item {} not found in {} history items",
-            id,
-            history_count
-        );
+        tracing::warn!("History item {} not found", id);
         (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
@@ -669,6 +694,31 @@ pub async fn xdcc_delete_history(
             }),
         )
             .into_response()
+    }
+}
+
+/// Clear all download history
+/// DELETE /api/history
+pub async fn xdcc_clear_history(State(state): State<AppState>) -> impl IntoResponse {
+    let tm = state.transfer_manager.write().await;
+
+    // Clear from TransferManager memory
+    tm.clear_history().await;
+
+    // Clear from database
+    match state.database.clear_download_history() {
+        Ok(deleted) => Json(serde_json::json!({
+            "status": "cleared",
+            "deleted": deleted
+        }))
+        .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Failed to clear history from database: {}", e),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -1011,6 +1061,77 @@ pub async fn get_plugin_status(State(state): State<AppState>) -> Json<PluginStat
         active_monitors,
         raw_irc_logs,
     })
+}
+
+pub async fn get_autodl_filters() -> impl IntoResponse {
+    match std::fs::read_to_string("plugins/autodl.json") {
+        Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
+            Ok(json) => Json(json).into_response(),
+            Err(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Failed to parse autodl.json".into(),
+                }),
+            )
+                .into_response(),
+        },
+        Err(_) => Json(serde_json::json!({ "filters": [] })).into_response(), // Default empty if not exists
+    }
+}
+
+pub async fn update_autodl_filters(
+    State(state): State<AppState>,
+    Json(filters): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    match serde_json::to_string_pretty(&filters) {
+        Ok(json_str) => {
+            if let Err(e) = std::fs::write("plugins/autodl.json", json_str) {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: format!("Failed to save: {}", e),
+                    }),
+                )
+                    .into_response();
+            }
+
+            // Always stop old monitors first to prevent duplicates when updating filters or toggling
+            state
+                .irc_monitor
+                .stop_monitors_for_plugin("autodl.lua")
+                .await;
+
+            // Check if plugin is enabled, attempt to load the plugin if not already loaded
+            if let Some(enabled) = filters.get("enabled").and_then(|f| f.as_bool()) {
+                if enabled {
+                    state
+                        .plugin_manager
+                        .load_script_file(std::path::Path::new("plugins/autodl.lua"));
+                    // Tell the plugin to reload its config and restart monitors
+                    state.plugin_manager.emit_signal(
+                        "config_changed",
+                        crate::plugin::EventData::String("autodl.lua".to_string()),
+                    );
+                }
+            } else if let Some(filters_array) = filters.get("filters").and_then(|f| f.as_array()) {
+                // Fallback for older formats
+                if !filters_array.is_empty() {
+                    state
+                        .plugin_manager
+                        .load_script_file(std::path::Path::new("plugins/autodl.lua"));
+                }
+            }
+
+            Json(serde_json::json!({ "success": true })).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: format!("Invalid JSON: {}", e),
+            }),
+        )
+            .into_response(),
+    }
 }
 
 // ============= WebSocket IRC Client =============

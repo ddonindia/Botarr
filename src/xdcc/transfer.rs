@@ -221,15 +221,119 @@ impl EnhancedTransferManager {
         }
     }
 
+    /// Strip IRC formatting codes (colors, bold, etc)
+    pub fn strip_irc_codes(s: &str) -> String {
+        let mut clean = String::with_capacity(s.len());
+        let mut chars = s.chars().peekable();
+        while let Some(c) = chars.next() {
+            match c {
+                '\x02' | '\x0F' | '\x16' | '\x1D' | '\x1F' => {}
+                '\x03' => {
+                    let mut fg = 0;
+                    while fg < 2 && chars.peek().is_some_and(|c| c.is_ascii_digit()) {
+                        chars.next();
+                        fg += 1;
+                    }
+                    let mut cloned = chars.clone();
+                    if cloned.next() == Some(',')
+                        && cloned.next().is_some_and(|c| c.is_ascii_digit())
+                    {
+                        chars.next(); // Consume comma
+                        chars.next(); // Consume first bg digit
+                        if chars.peek().is_some_and(|c| c.is_ascii_digit()) {
+                            chars.next();
+                        }
+                    }
+                }
+                _ => clean.push(c),
+            }
+        }
+        clean
+    }
+
+    /// Normalize a release title by stripping tags and replacing separators with spaces
+    fn normalize_title(title: &str) -> String {
+        let clean_title = Self::strip_irc_codes(title);
+        let mut s = clean_title.to_lowercase();
+        s = s.replace(['.', '-', '_', '[', ']'], " ");
+
+        let tags = [
+            "1080p", "720p", "2160p", "4k", "hdtv", "web dl", "webrip", "bluray", "x264", "x265",
+            "h264", "hevc", "aac", "ac3", "dts", "hdr", "10bit",
+        ];
+
+        let mut words: Vec<&str> = s.split_whitespace().collect();
+        words.retain(|w| !tags.contains(w));
+        words.join(" ")
+    }
+
     /// Create a new transfer with priority
     pub async fn create_transfer(
         &self,
         url: XdccUrl,
         priority: TransferPriority,
         start_paused: bool,
-    ) -> (String, CancellationToken) {
+        filename: Option<String>,
+    ) -> Result<(String, CancellationToken), String> {
+        let url_str = url.to_string();
+        let clean_filename = filename.as_ref().map(|f| Self::strip_irc_codes(f));
+
+        // Prevent duplicates in active transfers
+        {
+            let transfers = self.transfers.read().await;
+            if transfers
+                .values()
+                .any(|t| t.transfer.url.to_string() == url_str)
+            {
+                return Err("Transfer is already active".to_string());
+            }
+        }
+
+        // Prevent duplicates in history (Exact URL)
+        {
+            let history = self.history.read().await;
+            if history.iter().any(|t| t.url.to_string() == url_str) {
+                return Err("Transfer already exists in history".to_string());
+            }
+        }
+
+        // Prevent smart duplicates (Title Match)
+        if let Some(ref fname) = clean_filename {
+            let normalized_new = Self::normalize_title(fname);
+            if !normalized_new.is_empty() {
+                // Check history for same release title
+                let history = self.history.read().await;
+                for t in history.iter() {
+                    if let Some(ref old_fname) = t.filename {
+                        if Self::normalize_title(old_fname) == normalized_new {
+                            return Err(format!(
+                                "Duplicate release: already in history as {}",
+                                old_fname
+                            ));
+                        }
+                    }
+                }
+
+                // Check active transfers for same release title
+                let transfers = self.transfers.read().await;
+                for t in transfers.values() {
+                    if let Some(ref old_fname) = t.transfer.filename {
+                        if Self::normalize_title(old_fname) == normalized_new {
+                            return Err(format!(
+                                "Duplicate release: already active as {}",
+                                old_fname
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
         let id = Uuid::new_v4().to_string();
-        let transfer = XdccTransfer::new(id.clone(), url);
+        let mut transfer = XdccTransfer::new(id.clone(), url);
+        if clean_filename.is_some() {
+            transfer.filename = clean_filename;
+        }
         let mut enhanced = EnhancedTransfer::new(transfer);
         enhanced.priority = priority;
 
@@ -257,7 +361,7 @@ impl EnhancedTransferManager {
 
         self.save_to_database(&enhanced);
 
-        (id, token)
+        Ok((id, token))
     }
 
     /// Add transfer to priority queue
@@ -282,6 +386,66 @@ impl EnhancedTransferManager {
                 transfer.queue_position = Some(idx + 1);
             }
         }
+    }
+
+    async fn update_queue_positions(&self) {
+        let mut transfers = self.transfers.write().await;
+        let queue = self.queue.read().await;
+
+        for (pos, id) in queue.iter().enumerate() {
+            if let Some(t) = transfers.get_mut(id) {
+                t.queue_position = Some(pos + 1);
+            }
+        }
+    }
+
+    /// Pop an item from the queue to start processing, ensuring max 1 active per network
+    pub async fn pop_queue(&self) -> Option<(String, XdccUrl, CancellationToken)> {
+        let mut queue = self.queue.write().await;
+        let transfers = self.transfers.read().await;
+
+        // Find currently active networks
+        let mut active_networks = std::collections::HashSet::new();
+        for t in transfers.values() {
+            if matches!(
+                t.transfer.status,
+                TransferStatus::Connecting
+                    | TransferStatus::Joining
+                    | TransferStatus::Requesting
+                    | TransferStatus::Downloading
+            ) {
+                active_networks.insert(t.transfer.url.network.clone());
+            }
+        }
+
+        // Find the first item in queue that isn't on an active network
+        let mut selected_index = None;
+        for (i, id) in queue.iter().enumerate() {
+            if let Some(t) = transfers.get(id) {
+                if !active_networks.contains(&t.transfer.url.network) {
+                    selected_index = Some(i);
+                    break;
+                }
+            }
+        }
+
+        if let Some(idx) = selected_index {
+            let id = queue.remove(idx).unwrap();
+            if let Some(t) = transfers.get(&id) {
+                let url = t.transfer.url.clone();
+                let tokens = self.cancel_tokens.read().await;
+                if let Some(token) = tokens.get(&id) {
+                    let token = token.clone();
+                    // Update queue positions after popping
+                    drop(queue);
+                    drop(transfers);
+                    drop(tokens);
+                    self.update_queue_positions().await;
+                    return Some((id, url, token));
+                }
+            }
+        }
+        None
     }
 
     /// Get current queue size (Pending transfers)
@@ -391,6 +555,36 @@ impl EnhancedTransferManager {
         transfers.get(id).cloned()
     }
 
+    /// Add a log message to a specific transfer
+    pub async fn add_log(&self, id: &str, msg: String) {
+        let mut transfers = self.transfers.write().await;
+        if let Some(transfer) = transfers.get_mut(id) {
+            let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            transfer
+                .transfer
+                .logs
+                .push_back(format!("[{}] {}", timestamp, msg));
+            if transfer.transfer.logs.len() > 100 {
+                transfer.transfer.logs.pop_front();
+            }
+        }
+    }
+
+    /// Get logs for a specific transfer
+    pub async fn get_logs(&self, id: &str) -> Vec<String> {
+        let transfers = self.transfers.read().await;
+        if let Some(transfer) = transfers.get(id) {
+            return transfer.transfer.logs.iter().cloned().collect();
+        }
+
+        let history = self.history.read().await;
+        if let Some(transfer) = history.iter().find(|t| t.id == id) {
+            return transfer.logs.iter().cloned().collect();
+        }
+
+        Vec::new()
+    }
+
     /// List all active transfers
     pub async fn list_transfers(&self) -> Vec<EnhancedTransfer> {
         let transfers = self.transfers.read().await;
@@ -403,6 +597,12 @@ impl EnhancedTransferManager {
     pub async fn get_history(&self, limit: usize) -> Vec<XdccTransfer> {
         let history = self.history.read().await;
         history.iter().rev().take(limit).cloned().collect()
+    }
+
+    /// Clear all download history
+    pub async fn clear_history(&self) {
+        let mut history = self.history.write().await;
+        history.clear();
     }
 
     /// Get analytics
@@ -631,6 +831,42 @@ impl EnhancedTransferManager {
         // Remove from queue just in case
         let mut queue = self.queue.write().await;
         queue.retain(|queue_id| queue_id != id);
+
+        // Autodl cleanup logic: if the completed transfer matches an active "EVENT:" autodl filter, delete the filter
+        if let Some(ref fname) = transfer_copy.filename {
+            let path = "plugins/autodl.json";
+            if let Ok(content) = tokio::fs::read_to_string(path).await {
+                if let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    let mut updated = false;
+                    if let Some(filters) = json.get_mut("filters").and_then(|f| f.as_array_mut()) {
+                        let old_len = filters.len();
+                        filters.retain(|filter| {
+                            if let Some(name) = filter.get("name").and_then(|n| n.as_str()) {
+                                if name.starts_with("EVENT:") {
+                                    if let Some(match_regex) = filter.get("match").and_then(|m| m.as_str()) {
+                                        if let Ok(re) = regex::Regex::new(match_regex) {
+                                            if re.is_match(fname) {
+                                                tracing::info!("Auto-deleting completed EVENT match filter: {}", name);
+                                                return false; // Remove this filter
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            true // Keep other filters
+                        });
+                        if filters.len() != old_len {
+                            updated = true;
+                        }
+                    }
+                    if updated {
+                        if let Ok(new_content) = serde_json::to_string_pretty(&json) {
+                            let _ = tokio::fs::write(path, new_content).await;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Cancel a transfer
@@ -707,34 +943,58 @@ impl EnhancedTransferManager {
         );
 
         let mut history = self.history.write().await;
+        let mut found_in_memory = false;
+        let mut filename_to_delete = None;
+
         if let Some(pos) = history.iter().position(|t| t.id == id) {
             let item = history.remove(pos);
-
-            if delete_file {
-                if let Some(filename) = item.filename {
-                    let safe_filename =
-                        filename.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
-                    let path = std::path::Path::new(&self.download_dir).join(&safe_filename);
-
-                    tracing::info!("Attempting to delete file at path: {:?}", path);
-
-                    if path.exists() {
-                        match tokio::fs::remove_file(&path).await {
-                            Ok(_) => tracing::info!("Successfully deleted file: {:?}", path),
-                            Err(e) => tracing::error!("Failed to delete file {:?}: {}", path, e),
-                        }
-                    } else {
-                        tracing::warn!("File not found for deletion: {:?}", path);
-                    }
-                } else {
-                    tracing::warn!("No filename present for history item {}", id);
-                }
-            }
-            return true;
+            filename_to_delete = item.filename;
+            found_in_memory = true;
         }
 
-        tracing::warn!("History item {} not found", id);
-        false
+        // If not found in memory, try to find it in the database
+        if !found_in_memory {
+            if let Some(db) = &self.database {
+                if let Ok(Some(record)) = db.get_download(id) {
+                    filename_to_delete = record.file_name;
+                    found_in_memory = true;
+                }
+            }
+        }
+
+        if !found_in_memory {
+            tracing::warn!("History item {} not found in memory or database", id);
+            return false;
+        }
+
+        // Delete the file if requested and we have a filename
+        if delete_file {
+            if let Some(filename) = filename_to_delete {
+                let safe_filename =
+                    filename.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
+                let path = std::path::Path::new(&self.download_dir).join(&safe_filename);
+
+                tracing::info!("Attempting to delete file at path: {:?}", path);
+
+                if path.exists() {
+                    match tokio::fs::remove_file(&path).await {
+                        Ok(_) => tracing::info!("Successfully deleted file: {:?}", path),
+                        Err(e) => tracing::error!("Failed to delete file {:?}: {}", path, e),
+                    }
+                } else {
+                    tracing::warn!("File not found for deletion: {:?}", path);
+                }
+            } else {
+                tracing::warn!("No filename present for history item {}", id);
+            }
+        }
+
+        // Always attempt to delete from database
+        if let Some(db) = &self.database {
+            let _ = db.delete_download(id);
+        }
+
+        true
     }
     /// Restore incomplete transfers from the database
     pub async fn restore_incomplete_transfers(&self) -> Vec<(String, XdccUrl, CancellationToken)> {
@@ -771,6 +1031,7 @@ impl EnhancedTransferManager {
                             .unwrap_or_else(|_| Utc::now().into())
                             .into(),
                         updated_at: Utc::now(),
+                        logs: std::collections::VecDeque::new(),
                     };
 
                     let mut enhanced = EnhancedTransfer::new(transfer);

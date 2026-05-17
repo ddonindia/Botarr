@@ -232,6 +232,36 @@ impl Database {
         Ok(items)
     }
 
+    /// Get a single download record
+    pub fn get_download(&self, id: &str) -> SqliteResult<Option<DownloadRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, file_name, size, network, bot, channel, slot, priority, status, error, created_at, completed_at
+             FROM download_history
+             WHERE id = ?1"
+        )?;
+
+        let mut rows = stmt.query(params![id])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(DownloadRecord {
+                id: row.get(0)?,
+                file_name: row.get(1)?,
+                size: row.get(2)?,
+                network: row.get(3)?,
+                bot: row.get(4)?,
+                channel: row.get(5)?,
+                slot: row.get(6)?,
+                priority: row.get(7)?,
+                status: row.get(8)?,
+                error: row.get(9)?,
+                created_at: row.get(10)?,
+                completed_at: row.get(11)?,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Delete a download record
     pub fn delete_download(&self, id: &str) -> SqliteResult<bool> {
         let conn = self.conn.lock().unwrap();
@@ -251,6 +281,13 @@ impl Database {
         let params: Vec<&dyn rusqlite::ToSql> =
             ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
         let rows = conn.execute(&sql, params.as_slice())?;
+        Ok(rows)
+    }
+
+    /// Clear all download history
+    pub fn clear_download_history(&self) -> SqliteResult<usize> {
+        let conn = self.conn.lock().unwrap();
+        let rows = conn.execute("DELETE FROM download_history", [])?;
         Ok(rows)
     }
 

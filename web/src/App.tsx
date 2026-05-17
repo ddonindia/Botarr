@@ -9,10 +9,11 @@ import { SettingsTab } from './components/SettingsTab';
 import { Toast } from './components/Toast';
 import { Tabs } from './components/Tabs';
 import { SearchResults } from './components/SearchResults';
+import { AutodlTab } from './components/AutodlTab';
 import { useToast } from './hooks/useToast';
 import { XdccSearchResult, XdccTransfer, BotStats } from './types';
 
-type TabType = 'search' | 'activities' | 'history' | 'plugins' | 'client' | 'settings';
+type TabType = 'search' | 'activities' | 'history' | 'plugins' | 'autodl' | 'client' | 'settings';
 
 function App() {
     const [activeTab, setActiveTab] = useState<TabType>('search');
@@ -226,6 +227,7 @@ function App() {
                 )}
 
                 {activeTab === 'plugins' && <PluginsTab />}
+                {activeTab === 'autodl' && <AutodlTab />}
                 {activeTab === 'client' && <IrcClientTab />}
                 {activeTab === 'settings' && <SettingsTab />}
             </main>
