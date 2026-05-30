@@ -344,7 +344,7 @@ mod tests {
         let config = AppConfig::default();
         let (host, port, ssl, _, _) = config.resolve_network("SceneP2P");
         assert_eq!(host, "irc.scenep2p.net");
-        assert_eq!(port, 6697);
+        assert_eq!(port, 9999);
         assert!(ssl);
     }
 

@@ -10,6 +10,7 @@ import { Toast } from './components/Toast';
 import { Tabs } from './components/Tabs';
 import { SearchResults } from './components/SearchResults';
 import { AutodlTab } from './components/AutodlTab';
+import { ManualDownloadModal } from './components/ManualDownloadModal';
 import { useToast } from './hooks/useToast';
 import { XdccSearchResult, XdccTransfer, BotStats } from './types';
 
@@ -22,6 +23,7 @@ function App() {
     const [stats, setStats] = useState<BotStats[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [queueSize, setQueueSize] = useState(0);
+    const [showManualDownload, setShowManualDownload] = useState(false);
     const [downloadQueue, setDownloadQueue] = useState<XdccSearchResult[]>([]);
     const isProcessingQueueRef = useRef(false);
 
@@ -125,6 +127,25 @@ function App() {
         }
     };
 
+    const handleManualDownload = async (url: string) => {
+        try {
+            const res = await fetch('/api/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || "Failed to start download");
+            }
+            showToast("Download started", "success");
+            fetchUpdates();
+        } catch (e: any) {
+            showToast(e.message || "Failed to start download", "error");
+            throw e;
+        }
+    };
+
     const handleQueueDownload = (result: XdccSearchResult) => {
         setDownloadQueue(prev => [...prev, result]);
         showToast("Added to download queue", "success");
@@ -191,9 +212,22 @@ function App() {
 
                 {activeTab === 'search' && (
                     <div className="flex flex-col h-full animate-fade-in">
-                        <div className="text-center mb-8">
+                        <div className="text-center mb-8 relative">
                             <h1 className="text-3xl font-bold mb-2">Find & Download</h1>
                             <p className="text-secondary">Search across multiple XDCC bots and servers</p>
+                            <div className="absolute right-0 top-0">
+                                <button 
+                                    onClick={() => setShowManualDownload(true)} 
+                                    className="btn btn-secondary flex items-center gap-2"
+                                >
+                                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                    Manual Download
+                                </button>
+                            </div>
                         </div>
 
                         <SearchBar onSearch={handleSearch} isLoading={isLoading} />
@@ -239,7 +273,18 @@ function App() {
             </main>
 
             {toast.visible && (
-                <Toast message={toast.message} type={toast.type} onClose={hideToast} />
+                <Toast 
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={hideToast}
+                />
+            )}
+
+            {showManualDownload && (
+                <ManualDownloadModal 
+                    onClose={() => setShowManualDownload(false)}
+                    onSubmit={handleManualDownload}
+                />
             )}
         </div>
     );
