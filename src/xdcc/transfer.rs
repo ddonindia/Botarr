@@ -287,9 +287,9 @@ impl EnhancedTransferManager {
             transfer.retry_count += 1;
             transfer.transfer.status = TransferStatus::Pending;
             transfer.transfer.error = None;
-            transfer.transfer.downloaded = 0;
+            // Don't reset downloaded/progress - the XDCC client will use DCC RESUME
+            // to continue from where the partial file left off
             transfer.transfer.speed = 0.0;
-            transfer.transfer.progress = 0.0;
             transfer.transfer.updated_at = Utc::now();
 
             let priority = transfer.priority;
@@ -447,53 +447,79 @@ impl EnhancedTransferManager {
     }
 
     /// Mark transfer as failed with auto-retry
-    pub async fn set_failed(&self, id: &str, error: String, fatal: bool) -> bool {
-        let should_retry = {
-            let transfers = self.transfers.read().await;
-            if let Some(transfer) = transfers.get(id) {
-                !fatal && transfer.can_retry()
+    /// Returns Some((url, token)) if retry should happen, so caller can spawn new download task
+    pub async fn set_failed(&self, id: &str, error: String, fatal: bool) -> Option<(XdccUrl, CancellationToken)> {
+        let retry_info = {
+            let mut transfers = self.transfers.write().await;
+            if let Some(transfer) = transfers.get_mut(id) {
+                if !fatal && transfer.can_retry() {
+                    // Mark for retry
+                    transfer.retry_count += 1;
+                    transfer.transfer.status = TransferStatus::Pending;
+                    transfer.transfer.error = None;
+                    transfer.transfer.speed = 0.0;
+                    transfer.transfer.updated_at = Utc::now();
+                    
+                    // Create new cancellation token for retry
+                    let new_token = CancellationToken::new();
+                    let url = transfer.transfer.url.clone();
+                    
+                    tracing::info!("Transfer {} failed (retryable), will retry (attempt {}/{})", 
+                        id, transfer.retry_count, transfer.max_retries);
+                    
+                    // Store new token
+                    drop(transfers);
+                    {
+                        let mut tokens = self.cancel_tokens.write().await;
+                        tokens.insert(id.to_string(), new_token.clone());
+                    }
+                    
+                    Some((url, new_token))
+                } else {
+                    None
+                }
             } else {
-                false
+                None
             }
         };
 
-        if should_retry {
-            tracing::info!("Transfer {} failed (retryable), will retry", id);
-            self.retry_transfer(id).await
-        } else {
-            let mut transfers = self.transfers.write().await;
-            if let Some(mut transfer) = transfers.remove(id) {
-                transfer.transfer.status = TransferStatus::Failed;
-                transfer.transfer.error = Some(error);
-                transfer.transfer.updated_at = Utc::now();
+        if retry_info.is_some() {
+            return retry_info;
+        }
 
-                // Record bot failure
-                let bot = transfer.transfer.url.bot.clone();
-                let network = transfer.transfer.url.network.clone();
+        // Permanently failed - move to history
+        let mut transfers = self.transfers.write().await;
+        if let Some(mut transfer) = transfers.remove(id) {
+            transfer.transfer.status = TransferStatus::Failed;
+            transfer.transfer.error = Some(error);
+            transfer.transfer.updated_at = Utc::now();
 
-                // Add to history
-                drop(transfers);
-                let mut history = self.history.write().await;
-                history.push(transfer.transfer.clone());
+            // Record bot failure
+            let bot = transfer.transfer.url.bot.clone();
+            let network = transfer.transfer.url.network.clone();
 
-                // Trim history
-                let history_len = history.len();
-                if history_len > self.max_history {
-                    history.drain(0..history_len - self.max_history);
-                }
+            // Add to history
+            drop(transfers);
+            let mut history = self.history.write().await;
+            history.push(transfer.transfer.clone());
 
-                self.record_bot_failure(&bot, &network).await;
-                self.update_analytics(&transfer.transfer, false).await;
+            // Trim history
+            let history_len = history.len();
+            if history_len > self.max_history {
+                history.drain(0..history_len - self.max_history);
             }
 
-            let mut tokens = self.cancel_tokens.write().await;
-            tokens.remove(id);
-
-            let mut queue = self.queue.write().await;
-            queue.retain(|queue_id| queue_id != id);
-
-            false
+            self.record_bot_failure(&bot, &network).await;
+            self.update_analytics(&transfer.transfer, false).await;
         }
+
+        let mut tokens = self.cancel_tokens.write().await;
+        tokens.remove(id);
+
+        let mut queue = self.queue.write().await;
+        queue.retain(|queue_id| queue_id != id);
+
+        None
     }
 
     /// Mark transfer as completed
