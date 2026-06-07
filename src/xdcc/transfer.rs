@@ -448,7 +448,12 @@ impl EnhancedTransferManager {
 
     /// Mark transfer as failed with auto-retry
     /// Returns Some((url, token)) if retry should happen, so caller can spawn new download task
-    pub async fn set_failed(&self, id: &str, error: String, fatal: bool) -> Option<(XdccUrl, CancellationToken)> {
+    pub async fn set_failed(
+        &self,
+        id: &str,
+        error: String,
+        fatal: bool,
+    ) -> Option<(XdccUrl, CancellationToken)> {
         let retry_info = {
             let mut transfers = self.transfers.write().await;
             if let Some(transfer) = transfers.get_mut(id) {
@@ -459,21 +464,25 @@ impl EnhancedTransferManager {
                     transfer.transfer.error = None;
                     transfer.transfer.speed = 0.0;
                     transfer.transfer.updated_at = Utc::now();
-                    
+
                     // Create new cancellation token for retry
                     let new_token = CancellationToken::new();
                     let url = transfer.transfer.url.clone();
-                    
-                    tracing::info!("Transfer {} failed (retryable), will retry (attempt {}/{})", 
-                        id, transfer.retry_count, transfer.max_retries);
-                    
+
+                    tracing::info!(
+                        "Transfer {} failed (retryable), will retry (attempt {}/{})",
+                        id,
+                        transfer.retry_count,
+                        transfer.max_retries
+                    );
+
                     // Store new token
                     drop(transfers);
                     {
                         let mut tokens = self.cancel_tokens.write().await;
                         tokens.insert(id.to_string(), new_token.clone());
                     }
-                    
+
                     Some((url, new_token))
                 } else {
                     None
