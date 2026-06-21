@@ -14,7 +14,11 @@ fn main() {
     // Skip npm build if:
     // 1. CROSS_COMPILE is set (cross-compilation environment)
     // 2. SKIP_WEB_BUILD is set
-    if std::env::var("CROSS_COMPILE").is_ok() || std::env::var("SKIP_WEB_BUILD").is_ok() {
+    // 3. web/dist already exists (pre-built by CI)
+    if std::env::var("CROSS_COMPILE").is_ok()
+        || std::env::var("SKIP_WEB_BUILD").is_ok()
+        || std::path::Path::new("web/dist").exists()
+    {
         println!("cargo:warning=Skipping web build (pre-built or cross-compile)");
         return;
     }
@@ -22,13 +26,17 @@ fn main() {
     let _is_release = std::env::var("PROFILE").unwrap() == "release";
 
     #[cfg(windows)]
-    let npm_cmd = "npm.cmd";
-    #[cfg(not(windows))]
-    let npm_cmd = "npm";
+    let status = Command::new("cmd")
+        .arg("/C")
+        .arg("npm install")
+        .current_dir("web")
+        .status()
+        .expect("Failed to run npm install");
 
-    // 1. Install dependencies
-    let status = Command::new(npm_cmd)
-        .arg("install")
+    #[cfg(not(windows))]
+    let status = Command::new("sh")
+        .arg("-c")
+        .arg("npm install")
         .current_dir("web")
         .status()
         .expect("Failed to run npm install");
@@ -38,9 +46,18 @@ fn main() {
     }
 
     // 2. Build frontend
-    let status = Command::new(npm_cmd)
-        .arg("run")
-        .arg("build")
+    #[cfg(windows)]
+    let status = Command::new("cmd")
+        .arg("/C")
+        .arg("npm run build")
+        .current_dir("web")
+        .status()
+        .expect("Failed to run npm run build");
+
+    #[cfg(not(windows))]
+    let status = Command::new("sh")
+        .arg("-c")
+        .arg("npm run build")
         .current_dir("web")
         .status()
         .expect("Failed to run npm run build");
