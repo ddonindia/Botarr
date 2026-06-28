@@ -59,7 +59,11 @@ Open `http://localhost:3001` to access the dashboard.
 
 ## Configuration
 
-Botarr can be configured directly through the **Settings Tab** in the web interface or via environment variables:
+Botarr can be configured directly through the **Settings Tab** in the web interface or via a persistent JSON configuration file (`config.json`). 
+
+For advanced network configurations, such as configuring custom IRC servers with specific autojoin channels (e.g., `#zw-chat` on Abandoned-IRC) or SSL requirements, please refer to the provided `config.example.json` in the root directory. You can copy the structure from `config.example.json` into your actual `config.json` file.
+
+You can also use environment variables for basic paths:
 
 | Variable | Description | Default |
 |----------|-------------|---------|

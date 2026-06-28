@@ -1,0 +1,68 @@
+{
+  "use_ssl": true,
+  "connect_timeout": 15,
+  "general_timeout": 120,
+  "proxy_enabled": false,
+  "proxy_url": "",
+  "nickname": "botarr",
+  "username": "botarr",
+  "realname": "Botarr XDCC Client",
+  "max_retries": 3,
+  "retry_delay": 30,
+  "queue_limit": 2,
+  "passive_dcc": false,
+  "dcc_port_min": 49152,
+  "dcc_port_max": 65535,
+  "resume_enabled": true,
+  "enabled_providers": [
+    "SkullXDCC",
+    "XDCC.rocks",
+    "XDCC.eu"
+  ],
+  "results_per_page": 50,
+  "search_timeout": 30,
+  "networks": {
+    "SceneP2P": {
+      "host": "irc.scenep2p.net",
+      "port": 9999,
+      "ssl": true,
+      "autojoin_channels": [
+        "#THE.SOURCE.NOSPAM"
+      ],
+      "join_delay_secs": 6,
+      "nickserv_password": ""
+    },
+    "Rizon": {
+      "host": "irc.rizon.net",
+      "port": 6667,
+      "ssl": false,
+      "autojoin_channels": [],
+      "join_delay_secs": 6,
+      "nickserv_password": ""
+    },
+    "Abjects": {
+      "host": "irc.abjects.net",
+      "port": 6667,
+      "ssl": false,
+      "autojoin_channels": [],
+      "join_delay_secs": 6,
+      "nickserv_password": ""
+    },
+    "Abandoned-IRC": {
+      "host": "irc.abandoned-irc.net",
+      "port": 6697,
+      "ssl": true,
+      "autojoin_channels": [
+        "#zw-chat"
+      ],
+      "join_delay_secs": 10,
+      "nickserv_password": ""
+    }
+  },
+  "download_dir": "./downloads",
+  "move_completed": false,
+  "move_completed_dir": "",
+  "postprocess_script_enabled": false,
+  "postprocess_script": "",
+  "postprocess_timeout": 300
+}

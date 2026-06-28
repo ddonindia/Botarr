@@ -254,47 +254,7 @@ impl AppConfig {
 
     /// Get default network configurations
     fn default_networks() -> HashMap<String, NetworkConfig> {
-        let mut networks = HashMap::new();
-
-        // Networks that require SSL
-        networks.insert(
-            "SceneP2P".to_string(),
-            NetworkConfig {
-                host: "irc.scenep2p.net".to_string(),
-                port: 9999, // SceneP2P requires port 9999 for SSL
-                ssl: true,
-                autojoin_channels: vec!["#THE.SOURCE.NOSPAM".to_string()],
-                join_delay_secs: 6,
-                nickserv_password: String::new(),
-            },
-        );
-
-        // Networks that work without SSL
-        networks.insert(
-            "Rizon".to_string(),
-            NetworkConfig {
-                host: "irc.rizon.net".to_string(),
-                port: 6667,
-                ssl: false,
-                autojoin_channels: Vec::new(),
-                join_delay_secs: 6,
-                nickserv_password: String::new(),
-            },
-        );
-
-        networks.insert(
-            "Abjects".to_string(),
-            NetworkConfig {
-                host: "irc.abjects.net".to_string(),
-                port: 6667,
-                ssl: false,
-                autojoin_channels: Vec::new(),
-                join_delay_secs: 6,
-                nickserv_password: String::new(),
-            },
-        );
-
-        networks
+        HashMap::new()
     }
 
     /// Resolve network name to connection details
@@ -322,6 +282,13 @@ impl AppConfig {
         let port = if self.use_ssl { 6697 } else { 6667 };
         (host, port, self.use_ssl, Vec::new(), 6)
     }
+
+    /// Get the file path for a plugin's configuration file
+    pub fn get_plugin_config_path(plugin_name: &str) -> std::path::PathBuf {
+        let parent = std::path::Path::new("plugins");
+        let _ = std::fs::create_dir_all(parent);
+        parent.join(format!("{}.json", plugin_name))
+    }
 }
 
 #[cfg(test)]
@@ -337,15 +304,6 @@ mod tests {
         assert_eq!(config.nickname, "botarr");
         assert_eq!(config.max_retries, 3);
         assert!(config.resume_enabled);
-    }
-
-    #[test]
-    fn test_network_resolution_explicit() {
-        let config = AppConfig::default();
-        let (host, port, ssl, _, _) = config.resolve_network("SceneP2P");
-        assert_eq!(host, "irc.scenep2p.net");
-        assert_eq!(port, 9999);
-        assert!(ssl);
     }
 
     #[test]
