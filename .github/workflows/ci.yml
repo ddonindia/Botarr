@@ -30,7 +30,7 @@ jobs:
       run: cargo fmt -- --check
 
     - name: Lint with Clippy
-      run: cargo clippy -- -D warnings
+      run: cargo clippy --all-targets -- -D warnings
     
     - name: Build
       run: cargo build --verbose

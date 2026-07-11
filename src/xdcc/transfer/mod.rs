@@ -818,20 +818,17 @@ impl EnhancedTransferManager {
         // Permanently failed - copy to history but keep in active transfers until cleared
         let (bot, network, transfer_copy, enhanced_copy) = {
             let mut transfers = self.transfers.write().await;
-            if let Some(transfer) = transfers.get_mut(id) {
-                transfer.transfer.status = TransferStatus::Failed;
-                transfer.transfer.error = Some(error);
-                transfer.transfer.updated_at = Utc::now();
+            let transfer = transfers.get_mut(id)?;
+            transfer.transfer.status = TransferStatus::Failed;
+            transfer.transfer.error = Some(error);
+            transfer.transfer.updated_at = Utc::now();
 
-                (
-                    transfer.transfer.url.bot.clone(),
-                    transfer.transfer.url.network.clone(),
-                    transfer.transfer.clone(),
-                    transfer.clone(),
-                )
-            } else {
-                return None;
-            }
+            (
+                transfer.transfer.url.bot.clone(),
+                transfer.transfer.url.network.clone(),
+                transfer.transfer.clone(),
+                transfer.clone(),
+            )
         };
 
         self.add_to_history(&transfer_copy).await;
