@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useToast } from './useToast';
 
 export interface SearchHistoryItem {
     id: number;
@@ -14,7 +15,8 @@ export interface DownloadHistoryItem {
     size?: number;
     network: string;
     bot: string;
-    slot?: number;
+    channel: string;
+    slot: number;
     status: string;
     completed_at: string;
 }
@@ -41,6 +43,7 @@ export const useHistory = () => {
     const [downloadTotal, setDownloadTotal] = useState(0);
 
     const [loading, setLoading] = useState(false);
+    const { showToast } = useToast();
 
     const fetchSearchHistory = useCallback(async () => {
         setLoading(true);
@@ -125,6 +128,39 @@ export const useHistory = () => {
         }
     };
 
+    const retryDownload = async (item: DownloadHistoryItem) => {
+        try {
+            // Delete from history first to prevent duplicate errors
+            const deleteRes = await fetch(`/api/history/${item.id}?delete_file=false`, {
+                method: 'DELETE',
+            });
+
+            if (!deleteRes.ok) {
+                showToast('Failed to clear old history entry', 'error');
+                return;
+            }
+
+            // Re-submit as a new download
+            const url = `irc://${item.network}/${item.channel}/${item.bot}/${item.slot}`;
+            const res = await fetch('/api/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url, filename: item.file_name })
+            });
+
+            if (res.ok) {
+                setDownloads(prev => prev.filter(d => d.id !== item.id));
+                setDownloadTotal(prev => prev - 1);
+                showToast('Retry started', 'success');
+            } else {
+                showToast('Failed to retry download', 'error');
+            }
+        } catch (e) {
+            console.error('Failed to retry download:', e);
+            showToast('Failed to retry download', 'error');
+        }
+    };
+
     const bulkDeleteDownloads = async (selectedIds: Set<string>, deleteFiles: boolean) => {
         if (selectedIds.size === 0) return;
         try {
@@ -170,6 +206,7 @@ export const useHistory = () => {
         downloadTotal,
         fetchDownloadHistory,
         deleteDownload,
+        retryDownload,
         bulkDeleteDownloads,
         clearAllDownloads,
 

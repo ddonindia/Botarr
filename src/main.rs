@@ -73,6 +73,7 @@ async fn main() -> anyhow::Result<()> {
     let mut tm = TransferManager::new(download_dir.clone());
     tm.set_database(database.clone());
     let _restored_transfers = tm.restore_incomplete_transfers().await;
+    tm.restore_recent_finished_transfers(20).await;
 
     // Initialize Plugin Manager
     let (plugin_manager, mut plugin_rx) = match plugin::PluginManager::new() {

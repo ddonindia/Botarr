@@ -3,10 +3,29 @@
 //! Provides SQLite-based storage for download and search history.
 
 use chrono::Utc;
-use rusqlite::{params, Connection, Result as SqliteResult};
+use rusqlite::{params, Connection, Result as SqliteResult, Row};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+
+/// Map a database row to a DownloadRecord.
+/// Expects columns in order: id, file_name, size, network, bot, channel, slot, priority, status, error, created_at, completed_at
+fn row_to_download_record(row: &Row<'_>) -> rusqlite::Result<DownloadRecord> {
+    Ok(DownloadRecord {
+        id: row.get(0)?,
+        file_name: row.get(1)?,
+        size: row.get(2)?,
+        network: row.get(3)?,
+        bot: row.get(4)?,
+        channel: row.get(5)?,
+        slot: row.get(6)?,
+        priority: row.get(7)?,
+        status: row.get(8)?,
+        error: row.get(9)?,
+        created_at: row.get(10)?,
+        completed_at: row.get(11)?,
+    })
+}
 
 /// Database manager for persistent storage
 pub struct Database {
@@ -172,22 +191,7 @@ impl Database {
         )?;
 
         let items = stmt
-            .query_map(params![limit, offset], |row| {
-                Ok(DownloadRecord {
-                    id: row.get(0)?,
-                    file_name: row.get(1)?,
-                    size: row.get(2)?,
-                    network: row.get(3)?,
-                    bot: row.get(4)?,
-                    channel: row.get(5)?,
-                    slot: row.get(6)?,
-                    priority: row.get(7)?,
-                    status: row.get(8)?,
-                    error: row.get(9)?,
-                    created_at: row.get(10)?,
-                    completed_at: row.get(11)?,
-                })
-            })?
+            .query_map(params![limit, offset], row_to_download_record)?
             .collect::<Result<Vec<_>, _>>()?;
 
         let total_pages = (total + limit - 1) / limit;
@@ -211,22 +215,25 @@ impl Database {
         )?;
 
         let items = stmt
-            .query_map([], |row| {
-                Ok(DownloadRecord {
-                    id: row.get(0)?,
-                    file_name: row.get(1)?,
-                    size: row.get(2)?,
-                    network: row.get(3)?,
-                    bot: row.get(4)?,
-                    channel: row.get(5)?,
-                    slot: row.get(6)?,
-                    priority: row.get(7)?,
-                    status: row.get(8)?,
-                    error: row.get(9)?,
-                    created_at: row.get(10)?,
-                    completed_at: row.get(11)?,
-                })
-            })?
+            .query_map([], row_to_download_record)?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(items)
+    }
+
+    /// Get recent finished downloads
+    pub fn get_recent_finished_downloads(&self, limit: i64) -> SqliteResult<Vec<DownloadRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, file_name, size, network, bot, channel, slot, priority, status, error, created_at, completed_at
+             FROM download_history
+             WHERE status IN ('Completed', 'Failed', 'Cancelled')
+             ORDER BY completed_at DESC
+             LIMIT ?1"
+        )?;
+
+        let items = stmt
+            .query_map(params![limit], row_to_download_record)?
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(items)
@@ -407,5 +414,40 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let rows = conn.execute("DELETE FROM search_history", [])?;
         Ok(rows)
+    }
+
+    /// Find alternative sources for a given filename from recent search history
+    pub fn find_alternative_sources(
+        &self,
+        filename: &str,
+    ) -> SqliteResult<Vec<crate::xdcc::XdccUrl>> {
+        let conn = self.conn.lock().unwrap();
+        // Get the last 20 search records that have results_json
+        let mut stmt = conn.prepare(
+            "SELECT results_json
+             FROM search_history
+             WHERE results_json IS NOT NULL
+             ORDER BY searched_at DESC
+             LIMIT 20",
+        )?;
+
+        let mut alternatives = Vec::new();
+        let mut rows = stmt.query([])?;
+
+        while let Some(row) = rows.next()? {
+            let json_str: String = row.get(0)?;
+            if let Ok(results) =
+                serde_json::from_str::<Vec<crate::xdcc::XdccSearchResult>>(&json_str)
+            {
+                let filename_lower = filename.to_lowercase();
+                for result in results {
+                    if result.filename.to_lowercase() == filename_lower {
+                        alternatives.push(result.url);
+                    }
+                }
+            }
+        }
+
+        Ok(alternatives)
     }
 }

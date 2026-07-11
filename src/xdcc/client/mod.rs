@@ -335,6 +335,8 @@ impl XdccClient {
         let mut buf = Vec::with_capacity(1024);
         let mut joined_at: Option<std::time::Instant> = None;
         let mut requested_at: Option<std::time::Instant> = None;
+        let mut nick_retries: u32 = 0;
+        const MAX_NICK_RETRIES: u32 = 3;
 
         loop {
             // Check if we should request NOW (before reading)
@@ -421,10 +423,42 @@ impl XdccClient {
                         continue;
                     }
 
-                    // Handle 433 ERR_NICKNAMEINUSE — append _ and retry
+                    // Handle 433 ERR_NICKNAMEINUSE — append _ and retry (limited)
                     if line.contains(" 433 ") {
+                        nick_retries += 1;
+                        if nick_retries > MAX_NICK_RETRIES {
+                            return Err(XdccError::ConnectionFailed(format!(
+                                "Nickname rejected {} times, giving up",
+                                nick_retries - 1
+                            )));
+                        }
                         current_nick.push('_');
-                        tracing::warn!("Nick in use, retrying with: {}", current_nick);
+                        tracing::warn!(
+                            "Nick in use, retrying with: {} (attempt {}/{})",
+                            current_nick,
+                            nick_retries,
+                            MAX_NICK_RETRIES
+                        );
+                        Self::send_raw(&mut writer, &format!("NICK {}", current_nick)).await?;
+                        continue;
+                    }
+
+                    // Handle 432 ERR_ERRONEUSNICKNAME — prepend bot_ and retry (limited)
+                    if line.contains(" 432 ") {
+                        nick_retries += 1;
+                        if nick_retries > MAX_NICK_RETRIES {
+                            return Err(XdccError::ConnectionFailed(format!(
+                                "Nickname rejected {} times, giving up",
+                                nick_retries - 1
+                            )));
+                        }
+                        current_nick = format!("bot_{}", current_nick);
+                        tracing::warn!(
+                            "Erroneous nickname, retrying with: {} (attempt {}/{})",
+                            current_nick,
+                            nick_retries,
+                            MAX_NICK_RETRIES
+                        );
                         Self::send_raw(&mut writer, &format!("NICK {}", current_nick)).await?;
                         continue;
                     }
@@ -602,7 +636,7 @@ impl XdccClient {
                             line
                         )));
                     }
-                    if line.contains("Invalid Pack Number") {
+                    if line.to_lowercase().contains("invalid pack number") {
                         return Err(XdccError::InvalidPack(format!(
                             "Invalid pack number: {}",
                             line
@@ -634,14 +668,9 @@ impl XdccClient {
                                 let _ = tx
                                     .send(XdccEvent::IrcNotice(nick.clone(), msg.clone()))
                                     .await;
-                                if nick == url.bot {
-                                    let _ = tx
-                                        .send(XdccEvent::Log(format!(
-                                            "Notice from {}: {}",
-                                            nick, msg
-                                        )))
-                                        .await;
-                                }
+                                let _ = tx
+                                    .send(XdccEvent::Log(format!("Notice from {}: {}", nick, msg)))
+                                    .await;
                             }
                         }
                     }
@@ -650,7 +679,7 @@ impl XdccClient {
                     if line.contains("NOTICE") && line.contains(&config.nickname) {
                         tracing::info!("Bot notice: {}", line);
                         // Some bots send error messages via NOTICE too
-                        if line.contains("Invalid Pack Number") {
+                        if line.to_lowercase().contains("invalid pack number") {
                             return Err(XdccError::InvalidPack(format!(
                                 "Invalid pack number (notice): {}",
                                 line
@@ -704,7 +733,10 @@ impl XdccClient {
         writer
             .write_all(format!("{}\r\n", msg).as_bytes())
             .await
-            .map_err(|e| XdccError::ConnectionFailed(format!("Write error: {}", e)))
+            .map_err(|e| XdccError::ConnectionFailed(format!("Write error: {}", e)))?;
+
+        let _ = writer.flush().await;
+        Ok(())
     }
 
     /// Parse a generic IRC message

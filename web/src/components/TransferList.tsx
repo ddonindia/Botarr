@@ -19,7 +19,7 @@ interface TransferListProps {
 export const TransferList: React.FC<TransferListProps & { onRefresh?: () => void }> = ({ transfers, onCancel, onRetry, onResume, onDelete, onClearFinished, onRefresh }) => {
     const hasFinished = transfers.some(t => FINISHED_STATUSES.includes(t.status));
     const [selectedTransfer, setSelectedTransfer] = React.useState<XdccTransfer | null>(null);
-    const [filter, setFilter] = React.useState<'all' | 'active' | 'pending' | 'paused'>('all');
+    const [filter, setFilter] = React.useState<'all' | 'active' | 'pending' | 'paused' | 'failed' | 'completed'>('all');
 
     const filteredTransfers = React.useMemo(() => {
         let result = transfers;
@@ -29,6 +29,10 @@ export const TransferList: React.FC<TransferListProps & { onRefresh?: () => void
             result = transfers.filter(t => t.status === 'pending');
         } else if (filter === 'paused') {
             result = transfers.filter(t => t.status === 'paused');
+        } else if (filter === 'failed') {
+            result = transfers.filter(t => t.status === 'failed' || t.status === 'cancelled');
+        } else if (filter === 'completed') {
+            result = transfers.filter(t => t.status === 'completed');
         }
 
         // Sort: active first, then paused, then finished
@@ -51,6 +55,8 @@ export const TransferList: React.FC<TransferListProps & { onRefresh?: () => void
                         <button onClick={() => setFilter('active')} className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${filter === 'active' ? 'bg-white/10 text-white' : 'text-secondary hover:text-white'}`}>Active</button>
                         <button onClick={() => setFilter('pending')} className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${filter === 'pending' ? 'bg-white/10 text-white' : 'text-secondary hover:text-white'}`}>Pending</button>
                         <button onClick={() => setFilter('paused')} className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${filter === 'paused' ? 'bg-white/10 text-white' : 'text-secondary hover:text-white'}`}>Paused</button>
+                        <button onClick={() => setFilter('failed')} className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${filter === 'failed' ? 'bg-error/20 text-error' : 'text-secondary hover:text-error'}`}>Failed</button>
+                        <button onClick={() => setFilter('completed')} className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${filter === 'completed' ? 'bg-success/20 text-success' : 'text-secondary hover:text-success'}`}>Completed</button>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">

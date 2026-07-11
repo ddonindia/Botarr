@@ -88,6 +88,81 @@ impl EnhancedTransferManager {
         }
     }
 
+    /// Add a transfer to the in-memory history list, trimming to max_history
+    async fn add_to_history(&self, transfer: &XdccTransfer) {
+        let mut history = self.history.write().await;
+        history.push(transfer.clone());
+        let history_len = history.len();
+        if history_len > self.max_history {
+            history.drain(0..history_len - self.max_history);
+        }
+    }
+
+    /// Remove a transfer's cancellation token and queue entry
+    async fn cleanup_transfer_state(&self, id: &str) {
+        let mut tokens = self.cancel_tokens.write().await;
+        tokens.remove(id);
+        let mut queue = self.queue.write().await;
+        queue.retain(|queue_id| queue_id != id);
+    }
+
+    /// Convert a DownloadRecord into an (XdccTransfer, TransferPriority) pair
+    fn record_to_transfer(
+        record: &crate::db::DownloadRecord,
+        status_override: Option<TransferStatus>,
+    ) -> (XdccTransfer, TransferPriority) {
+        let priority = match record.priority.as_str() {
+            "low" => TransferPriority::Low,
+            "high" => TransferPriority::High,
+            "urgent" => TransferPriority::Urgent,
+            _ => TransferPriority::Normal,
+        };
+
+        let url = XdccUrl {
+            network: record.network.clone(),
+            channel: record.channel.clone(),
+            bot: record.bot.clone(),
+            slot: record.slot,
+        };
+
+        let status = status_override.unwrap_or(match record.status.as_str() {
+            "Completed" => TransferStatus::Completed,
+            "Failed" => TransferStatus::Failed,
+            "Cancelled" => TransferStatus::Cancelled,
+            "Pending" => TransferStatus::Pending,
+            _ => TransferStatus::Failed,
+        });
+
+        let transfer = XdccTransfer {
+            id: record.id.clone(),
+            url,
+            status: status.clone(),
+            filename: record.file_name.clone(),
+            size: record.size.map(|s| s as u64),
+            downloaded: if status == TransferStatus::Completed {
+                record.size.map(|s| s as u64).unwrap_or(0)
+            } else {
+                0
+            },
+            speed: 0.0,
+            progress: if status == TransferStatus::Completed {
+                100.0
+            } else {
+                0.0
+            },
+            error: record.error.clone(),
+            created_at: chrono::DateTime::parse_from_rfc3339(&record.created_at)
+                .unwrap_or_else(|_| Utc::now().into())
+                .into(),
+            updated_at: chrono::DateTime::parse_from_rfc3339(&record.completed_at)
+                .unwrap_or_else(|_| Utc::now().into())
+                .into(),
+            logs: std::collections::VecDeque::new(),
+        };
+
+        (transfer, priority)
+    }
+
     /// Strip IRC formatting codes (colors, bold, etc)
     pub fn strip_irc_codes(s: &str) -> String {
         let mut clean = String::with_capacity(s.len());
@@ -400,7 +475,12 @@ impl EnhancedTransferManager {
     pub async fn retry_transfer(&self, id: &str) -> bool {
         let mut transfers = self.transfers.write().await;
         if let Some(transfer) = transfers.get_mut(id) {
-            if !transfer.can_retry() {
+            // If the user manually retries a failed/cancelled transfer, allow it
+            if transfer.transfer.status == TransferStatus::Failed
+                || transfer.transfer.status == TransferStatus::Cancelled
+            {
+                transfer.retry_count = 0;
+            } else if !transfer.can_retry() {
                 return false;
             }
 
@@ -414,7 +494,16 @@ impl EnhancedTransferManager {
 
             let priority = transfer.priority;
             let id = id.to_string();
+
+            // Create a new cancellation token for the retry
+            let new_token = CancellationToken::new();
+
             drop(transfers);
+
+            {
+                let mut tokens = self.cancel_tokens.write().await;
+                tokens.insert(id.clone(), new_token);
+            }
 
             // Add back to queue
             self.add_to_queue(id, priority).await;
@@ -633,15 +722,69 @@ impl EnhancedTransferManager {
         let retry_info = {
             let mut transfers = self.transfers.write().await;
             if let Some(transfer) = transfers.get_mut(id) {
-                if !fatal && transfer.can_retry() {
-                    // Mark for retry
-                    transfer.retry_count += 1;
-                    transfer.transfer.status = TransferStatus::Pending;
-                    transfer.transfer.error = None;
+                // Check for Automatic Fallback on InvalidPack
+                let mut fallback_url = None;
+                if error.to_lowercase().contains("invalid pack") {
+                    if let Some(ref filename) = transfer.transfer.filename {
+                        tracing::info!(
+                            "Invalid pack detected for {}. Searching for alternatives...",
+                            filename
+                        );
+                        if let Some(db) = &self.database {
+                            if let Ok(alternatives) = db.find_alternative_sources(filename) {
+                                for alt in alternatives {
+                                    // Make sure we haven't already tried this alt url
+                                    if alt.to_string() != transfer.transfer.url.to_string() {
+                                        tracing::info!("Found alternative source: {}", alt);
+                                        fallback_url = Some(alt);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        tracing::warn!("Invalid pack detected, but no filename was provided by the UI. Cannot fallback reliably.");
+                    }
+                }
+
+                if fallback_url.is_some() || (!fatal && transfer.can_retry()) {
+                    // Mark for retry or fallback
+                    transfer.retry_count = if fallback_url.is_some() {
+                        0
+                    } else {
+                        transfer.retry_count + 1
+                    };
+
+                    if let Some(alt_url) = fallback_url.clone() {
+                        transfer.transfer.url = alt_url;
+                        transfer.transfer.status = TransferStatus::Paused;
+                        transfer.transfer.error =
+                            Some("Stale pack. Found alternative, review and resume.".to_string());
+                    } else {
+                        transfer.transfer.status = TransferStatus::Pending;
+                        transfer.transfer.error = None;
+                    }
+
                     transfer.transfer.speed = 0.0;
                     transfer.transfer.updated_at = Utc::now();
 
-                    // Create new cancellation token for retry
+                    if fallback_url.is_some() {
+                        tracing::info!("Transfer {} falling back to alternative source (Paused for user review)", id);
+                        let transfer_copy = transfer.clone();
+                        drop(transfers);
+
+                        self.save_to_database(&transfer_copy);
+
+                        let mut tokens = self.cancel_tokens.write().await;
+                        tokens.remove(id);
+
+                        let mut queue = self.queue.write().await;
+                        queue.retain(|queue_id| queue_id != id);
+
+                        return None;
+                    }
+
+                    // Standard retry logic
                     let new_token = CancellationToken::new();
                     let url = transfer.transfer.url.clone();
 
@@ -672,43 +815,34 @@ impl EnhancedTransferManager {
             return retry_info;
         }
 
-        // Permanently failed - move to history
-        let mut transfers = self.transfers.write().await;
-        if let Some(mut transfer) = transfers.remove(id) {
-            transfer.transfer.status = TransferStatus::Failed;
-            transfer.transfer.error = Some(error);
-            transfer.transfer.updated_at = Utc::now();
+        // Permanently failed - copy to history but keep in active transfers until cleared
+        let (bot, network, transfer_copy, enhanced_copy) = {
+            let mut transfers = self.transfers.write().await;
+            if let Some(transfer) = transfers.get_mut(id) {
+                transfer.transfer.status = TransferStatus::Failed;
+                transfer.transfer.error = Some(error);
+                transfer.transfer.updated_at = Utc::now();
 
-            // Record bot failure
-            let bot = transfer.transfer.url.bot.clone();
-            let network = transfer.transfer.url.network.clone();
-
-            // Add to history
-            drop(transfers);
-            let mut history = self.history.write().await;
-            history.push(transfer.transfer.clone());
-
-            // Trim history
-            let history_len = history.len();
-            if history_len > self.max_history {
-                history.drain(0..history_len - self.max_history);
+                (
+                    transfer.transfer.url.bot.clone(),
+                    transfer.transfer.url.network.clone(),
+                    transfer.transfer.clone(),
+                    transfer.clone(),
+                )
+            } else {
+                return None;
             }
+        };
 
-            self.record_bot_failure(&bot, &network).await;
-            self.update_analytics(&transfer.transfer, false).await;
-            self.save_to_database(&transfer);
-        }
-
-        let mut tokens = self.cancel_tokens.write().await;
-        tokens.remove(id);
-
-        let mut queue = self.queue.write().await;
-        queue.retain(|queue_id| queue_id != id);
+        self.add_to_history(&transfer_copy).await;
+        self.record_bot_failure(&bot, &network).await;
+        self.update_analytics(&transfer_copy, false).await;
+        self.save_to_database(&enhanced_copy);
+        self.cleanup_transfer_state(id).await;
 
         None
     }
 
-    /// Mark transfer as completed
     /// Mark transfer as completed and move to history
     pub async fn set_completed(&self, id: &str) {
         let (bot, network, bytes, speed, transfer_copy) = {
@@ -728,36 +862,17 @@ impl EnhancedTransferManager {
 
                 self.save_to_database(transfer);
 
-                // Remove from active transfers
-                transfers.remove(id);
+                // Do not remove from active transfers yet, wait for manual clear
                 info
             } else {
                 return;
             }
         };
 
-        // Record bot success
         self.record_bot_success(&bot, &network, bytes, speed).await;
-
-        // Add to history
-        let mut history = self.history.write().await;
-        history.push(transfer_copy.clone());
-
-        // Trim history
-        let history_len = history.len();
-        if history_len > self.max_history {
-            history.drain(0..history_len - self.max_history);
-        }
-
-        // Update analytics
+        self.add_to_history(&transfer_copy).await;
         self.update_analytics(&transfer_copy, true).await;
-
-        let mut tokens = self.cancel_tokens.write().await;
-        tokens.remove(id);
-
-        // Remove from queue just in case
-        let mut queue = self.queue.write().await;
-        queue.retain(|queue_id| queue_id != id);
+        self.cleanup_transfer_state(id).await;
 
         // Autodl cleanup logic: if the completed transfer matches an active "EVENT:" autodl filter, delete the filter
         if let Some(ref fname) = transfer_copy.filename {
@@ -830,20 +945,25 @@ impl EnhancedTransferManager {
             }
         }
 
-        let mut transfers = self.transfers.write().await;
-        if let Some(transfer) = transfers.get_mut(id) {
-            transfer.transfer.status = TransferStatus::Cancelled;
-            transfer.transfer.updated_at = Utc::now();
+        let enhanced_copy = {
+            let mut transfers = self.transfers.write().await;
+            if let Some(transfer) = transfers.get_mut(id) {
+                transfer.transfer.status = TransferStatus::Cancelled;
+                transfer.transfer.updated_at = Utc::now();
+                Some(transfer.clone())
+            } else {
+                None
+            }
+        };
 
-            let mut tokens = self.cancel_tokens.write().await;
-            tokens.remove(id);
-
-            // Remove from queue if present
-            let mut queue = self.queue.write().await;
-            queue.retain(|queue_id| queue_id != id);
-
+        if let Some(copy) = enhanced_copy {
+            self.cleanup_transfer_state(id).await;
+            self.add_to_history(&copy.transfer).await;
+            self.update_analytics(&copy.transfer, false).await;
+            self.save_to_database(&copy);
             return true;
         }
+
         false
     }
 
@@ -935,41 +1055,17 @@ impl EnhancedTransferManager {
         if let Some(db) = &self.database {
             if let Ok(records) = db.get_incomplete_downloads() {
                 for record in records {
-                    let priority = match record.priority.as_str() {
-                        "low" => TransferPriority::Low,
-                        "high" => TransferPriority::High,
-                        "urgent" => TransferPriority::Urgent,
-                        _ => TransferPriority::Normal,
-                    };
-
-                    let url = XdccUrl {
-                        network: record.network,
-                        channel: record.channel,
-                        bot: record.bot,
-                        slot: record.slot,
-                    };
-
-                    let transfer = XdccTransfer {
-                        id: record.id.clone(),
-                        url: url.clone(),
-                        status: TransferStatus::Pending,
-                        filename: record.file_name,
-                        size: record.size.map(|s| s as u64),
-                        downloaded: 0,
-                        speed: 0.0,
-                        progress: 0.0,
-                        error: None,
-                        created_at: chrono::DateTime::parse_from_rfc3339(&record.created_at)
-                            .unwrap_or_else(|_| Utc::now().into())
-                            .into(),
-                        updated_at: Utc::now(),
-                        logs: std::collections::VecDeque::new(),
-                    };
+                    let (mut transfer, priority) =
+                        Self::record_to_transfer(&record, Some(TransferStatus::Pending));
+                    // For incomplete restores, clear error and reset timestamps
+                    transfer.error = None;
+                    transfer.updated_at = Utc::now();
 
                     let mut enhanced = EnhancedTransfer::new(transfer);
                     enhanced.priority = priority;
 
                     let token = CancellationToken::new();
+                    let url = enhanced.transfer.url.clone();
 
                     {
                         let mut transfers = self.transfers.write().await;
@@ -987,6 +1083,37 @@ impl EnhancedTransferManager {
         }
 
         restored
+    }
+
+    /// Restore recent finished transfers from the database into the active list
+    pub async fn restore_recent_finished_transfers(&self, limit: i64) {
+        if let Some(db) = &self.database {
+            if let Ok(records) = db.get_recent_finished_downloads(limit) {
+                let mut transfers = self.transfers.write().await;
+                let mut history = self.history.write().await;
+
+                for record in records {
+                    let (transfer, priority) = Self::record_to_transfer(&record, None);
+
+                    let mut enhanced = EnhancedTransfer::new(transfer.clone());
+                    enhanced.priority = priority;
+
+                    // Insert into active transfers
+                    transfers.insert(record.id.clone(), enhanced);
+
+                    // Also ensure it's in history if not already
+                    if !history.iter().any(|t| t.id == record.id) {
+                        history.push(transfer);
+                    }
+                }
+
+                // Trim history
+                let history_len = history.len();
+                if history_len > self.max_history {
+                    history.drain(0..history_len - self.max_history);
+                }
+            }
+        }
     }
 }
 

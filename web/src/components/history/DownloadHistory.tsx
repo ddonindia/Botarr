@@ -12,6 +12,7 @@ interface DownloadHistoryProps {
     downloadTotal: number;
     fetchDownloadHistory: () => Promise<void>;
     deleteDownload: (id: string, deleteFile: boolean) => Promise<void>;
+    retryDownload: (item: DownloadHistoryItem) => Promise<void>;
     bulkDeleteDownloads: (selectedIds: Set<string>, deleteFiles: boolean) => Promise<void>;
     clearAllDownloads: () => Promise<void>;
     loading: boolean;
@@ -25,6 +26,7 @@ export const DownloadHistory: React.FC<DownloadHistoryProps> = ({
     downloadTotal,
     fetchDownloadHistory,
     deleteDownload,
+    retryDownload,
     bulkDeleteDownloads,
     clearAllDownloads,
     loading
@@ -146,6 +148,15 @@ export const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         <div className="flex justify-end gap-1">
+                                            {(item.status === 'failed' || item.status === 'cancelled') && (
+                                                <button
+                                                    onClick={() => retryDownload(item)}
+                                                    className="p-1.5 text-primary hover:bg-primary/20 hover:text-white rounded transition-colors"
+                                                    title="Retry download"
+                                                >
+                                                    <RefreshCw size={16} />
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={() => deleteDownload(item.id, false)}
                                                 className="p-1.5 text-secondary hover:text-white rounded"

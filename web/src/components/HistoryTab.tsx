@@ -68,6 +68,7 @@ export const HistoryTab: React.FC = () => {
                     downloadTotal={historyState.downloadTotal}
                     fetchDownloadHistory={historyState.fetchDownloadHistory}
                     deleteDownload={historyState.deleteDownload}
+                    retryDownload={historyState.retryDownload}
                     bulkDeleteDownloads={historyState.bulkDeleteDownloads}
                     clearAllDownloads={historyState.clearAllDownloads}
                     loading={historyState.loading}
